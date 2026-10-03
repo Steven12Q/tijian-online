@@ -82,6 +82,22 @@ function cleanImages(v) {
   if (!Array.isArray(v)) return [];
   return v.map(x => String(x || '')).filter(x => /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,/i.test(x) && x.length <= 2_600_000).slice(0, 6);
 }
+function cleanLayout(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const placement = ['below','right','left'].includes(String(v.imagePlacement||'')) ? String(v.imagePlacement) : 'below';
+  const align = ['left','center','right','top','middle','bottom'].includes(String(v.align||'')) ? String(v.align) : 'left';
+  const ratio = Number(v.imageWidthRatio);
+  const maxMm = Number(v.imageMaxWidthMm);
+  return {
+    imagePlacement: placement,
+    align,
+    imageWidthRatio: Number.isFinite(ratio) ? Math.min(1, Math.max(0.1, ratio)) : undefined,
+    imageMaxWidthMm: Number.isFinite(maxMm) ? Math.min(180, Math.max(20, maxMm)) : undefined,
+    textWrap: Boolean(v.textWrap),
+    keepWithStem: v.keepWithStem !== false,
+    pageBreakInsideAvoid: v.pageBreakInsideAvoid !== false
+  };
+}
 function cleanQuestionBody(b) {
   const tags = Array.isArray(b.tags)
     ? b.tags.map(x => String(x).trim()).filter(Boolean).slice(0, 20)
@@ -100,7 +116,8 @@ function cleanQuestionBody(b) {
     answer: String(b.answer || ''),
     solution: String(b.solution || ''),
     stemImages: cleanImages(b.stemImages),
-    solutionImages: cleanImages(b.solutionImages)
+    solutionImages: cleanImages(b.solutionImages),
+    layout: cleanLayout(b.layout)
   };
 }
 function questionFromRow(r) {
@@ -108,7 +125,7 @@ function questionFromRow(r) {
     id: r.id, title: r.title, type: r.type, grade: r.grade,
     difficulty: r.difficulty, topic: r.topic, chapter: r.chapter || r.topic, source: r.source, examNumber: r.exam_number || '',
     tags: r.tags || [], stem: r.stem, answer: r.answer, solution: r.solution,
-    stemImages: r.stem_images || [], solutionImages: r.solution_images || [],
+    stemImages: r.stem_images || [], solutionImages: r.solution_images || [], layout: r.layout || {},
     createdBy: r.created_by_name || '未知', updatedBy: r.updated_by_name || '未知',
     createdAt: r.created_at, updatedAt: r.updated_at
   };
@@ -148,6 +165,7 @@ async function initDb() {
       solution TEXT NOT NULL DEFAULT '',
       stem_images JSONB NOT NULL DEFAULT '[]'::jsonb,
       solution_images JSONB NOT NULL DEFAULT '[]'::jsonb,
+      layout JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -159,6 +177,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS chapter TEXT NOT NULL DEFAULT '其他'`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS exam_number TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS solution_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS layout JSONB NOT NULL DEFAULT '{}'::jsonb`);
   await pool.query(`UPDATE questions SET chapter=topic WHERE chapter='其他' OR chapter=''`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_updated_at ON questions(updated_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic)`);
@@ -268,9 +287,9 @@ const server = http.createServer(async (req, res) => {
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
       const id = `Q-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,created_by,updated_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$16) RETURNING *`,
-        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$17) RETURNING *`,
+        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
       const row = rows[0]; row.created_by_name=u.name; row.updated_by_name=u.name;
       return json(res, 201, { question: questionFromRow(row) });
     }
@@ -295,13 +314,13 @@ const server = http.createServer(async (req, res) => {
             const exists = await client.query('SELECT id FROM questions WHERE id=$1', [id]);
             if (exists.rows[0]) {
               if (onDuplicate === 'skip') { summary.skipped++; continue; }
-              await client.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,updated_by=$16,updated_at=NOW() WHERE id=$1`,
-                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+              await client.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,layout=$16::jsonb,updated_by=$17,updated_at=NOW() WHERE id=$1`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
               summary.replaced++;
             } else {
-              await client.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,created_by,updated_by)
-                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$16)`,
-                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+              await client.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
+                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$17)`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
               summary.imported++;
             }
           } catch (e) {
@@ -321,8 +340,8 @@ const server = http.createServer(async (req, res) => {
       const u = await requireUser(req, res); if (!u) return;
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
-      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,updated_by=$16,updated_at=NOW() WHERE id=$1 RETURNING *`,
-        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,layout=$16::jsonb,updated_by=$17,updated_at=NOW() WHERE id=$1 RETURNING *`,
+        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
       if (!rows[0]) return json(res, 404, { error: '题目不存在' });
       const row=rows[0];
       const names = await pool.query('SELECT name FROM users WHERE id=$1',[row.created_by]);
