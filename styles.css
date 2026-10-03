@@ -33,3 +33,8 @@
 .haidian-q7-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important;width:125mm!important;max-width:100%!important;margin:12px 0!important;align-items:end!important;}
 .haidian-q7-grid img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;object-fit:contain!important;}
 @media(max-width:900px){.haidian-q7-grid{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+
+/* v1.3.4 robust multi-image layout */
+.multi-image-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;width:125mm!important;max-width:100%!important;margin:10px 0!important;align-items:end!important;}
+.multi-image-grid img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;object-fit:contain!important;}
+@media(max-width:900px){.multi-image-grid{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
