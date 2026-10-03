@@ -38,3 +38,8 @@
 .multi-image-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important;width:125mm!important;max-width:100%!important;margin:10px 0!important;align-items:end!important;}
 .multi-image-grid img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;object-fit:contain!important;}
 @media(max-width:900px){.multi-image-grid{width:100%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+
+/* v1.3.5 hard layout fixes for Haidian Q7/Q15 */
+.question-flow.flow-right{display:flex!important;align-items:flex-start!important;gap:18px!important}
+.question-flow.flow-right>.question-stem{flex:1 1 auto!important;min-width:0!important}
+.question-flow.flow-right>.question-images{flex:0 0 auto!important;margin:0!important}

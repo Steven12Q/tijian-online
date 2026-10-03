@@ -48,7 +48,16 @@ function fallbackLayout(q={}){
   };
   return m[key]||{};
 }
-function effectiveLayout(q={}){const fb=fallbackLayout(q);const db=(q.layout&&typeof q.layout==='object')?q.layout:{};return {...fb,...db}}
+function effectiveLayout(q={}){
+  const fb=fallbackLayout(q);
+  const db=(q.layout&&typeof q.layout==='object')?q.layout:{};
+  const src=String(q.source||'');
+  const n=String(q.examNumber||'').match(/\d+/)?.[0]||'';
+  // v1.3.5: 对海淀带图题使用强制版式，优先级高于数据库旧 layout，避免历史数据覆盖新版排版。
+  if(src.includes('海淀')&&n==='7') return {...fb,...db,imagePlacement:'below',align:'left',imageWidthRatio:0.75,imageMaxWidthMm:null,keepWithStem:true};
+  if(src.includes('海淀')&&n==='15') return {...fb,...db,imagePlacement:'right',align:'top',imageMaxWidthMm:52,imageWidthRatio:null,textWrap:true,keepWithStem:true};
+  return {...fb,...db};
+}
 function imageBoxStyle(layout={}){const mm=Number(layout.imageMaxWidthMm);const ratio=Number(layout.imageWidthRatio);if(Number.isFinite(mm)){const x=Math.max(20,Math.min(180,mm));return `width:${x}mm;max-width:${x}mm;flex:0 0 ${x}mm;`;}if(Number.isFinite(ratio)){const x=Math.max(10,Math.min(100,ratio*100));return `width:${x}%;max-width:${x}%;flex:0 0 ${x}%;`;}return 'max-width:100%;'}
 function imageHtml(images=[],layout={}){if(!images?.length)return '';const p=layout.imagePlacement||'below';const cls=`question-images placement-${p} align-${layout.align||'left'}`;const st=imageBoxStyle(layout);return `<div class="${cls}" style="${st}">${images.map(src=>`<img src="${escapeHtml(src)}" loading="lazy" alt="题目配图">`).join('')}</div>`}
 function isHaidianQ7(q={}){return /海淀/.test(String(q.source||''))&&String(q.examNumber||'')==='7'}
