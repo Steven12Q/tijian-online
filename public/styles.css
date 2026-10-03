@@ -9,3 +9,22 @@
 /* v1.3.1 image layout fidelity */
 .question-flow{display:flex;gap:18px;align-items:flex-start}.question-flow.flow-right .question-stem{flex:1;min-width:0}.question-flow.flow-left{flex-direction:row-reverse}.question-flow.flow-left .question-stem{flex:1;min-width:0}.question-flow .question-images{flex:0 0 auto;margin:0}.question-images{align-items:flex-start}.question-images.align-center{justify-content:center}.question-images.align-right{justify-content:flex-end}.question-images img{width:auto;height:auto;max-width:100%;max-height:none;object-fit:contain;border:0;border-radius:0}.paper-main .question-flow{gap:14px}.paper-main .question-images img{max-height:none}
 @media(max-width:900px){.question-flow{display:block}.question-flow .question-images{margin-top:10px}.question-images img{max-width:100%!important}}
+
+/* v1.3.2 strict original-paper image sizing */
+.question-flow{display:flex!important;align-items:flex-start!important;gap:10mm!important}
+.question-flow.flow-right .question-stem,.question-flow.flow-left .question-stem{flex:1 1 auto;min-width:0}
+.question-flow.flow-left{flex-direction:row-reverse}
+.question-images{display:block!important;margin:2mm 0 3mm!important;flex-grow:0!important;flex-shrink:0!important}
+.question-flow .question-images{margin:0!important}
+.question-images img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important;object-fit:contain!important;border:0!important;border-radius:0!important}
+.question-images.align-center{margin-left:auto!important;margin-right:auto!important}
+.question-images.align-right{margin-left:auto!important}
+.paper-main .question-images{margin-top:1.5mm!important;margin-bottom:2mm!important}
+@media print{
+  .paper-item{page-break-inside:avoid;break-inside:avoid;padding:3mm 0!important}
+  .paper-main .question-flow{display:flex!important;gap:5mm!important;align-items:flex-start!important}
+  .paper-main .question-images,.imgs{flex-grow:0!important;flex-shrink:0!important}
+  .paper-main .question-images img,.imgs img{display:block!important;width:100%!important;max-width:100%!important;height:auto!important}
+  .qflow{display:flex!important;align-items:flex-start!important;gap:5mm!important}
+  .qflow.right .stem{flex:1 1 auto;min-width:0}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1 1 auto;min-width:0}
+}
