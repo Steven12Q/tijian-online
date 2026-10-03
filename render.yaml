@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: tijian-online
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tijian-db
+          property: connectionString
+      - key: SESSION_DAYS
+        value: "14"
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: 管理员
+
+databases:
+  - name: tijian-db
+    plan: free
