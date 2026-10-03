@@ -1,0 +1,151 @@
+let me=null, questions=[], selectedId=null, topicFilter='', currentPage='bank', bankMode='all', editingId=null, users=[];
+let paperIds=JSON.parse(localStorage.getItem('tijian-paper')||'[]');
+let draftStemImages=[], draftSolutionImages=[];
+let importPayload=null;
+const $=s=>document.querySelector(s);
+async function api(url,opts={}){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||'请求失败');return data}
+function normalizeLatexText(input=''){
+  let s=String(input||'').replace(/\r\n/g,'\n');
+  // Remove full-line LaTeX comments and document/preamble lines that should not be shown in a question bank.
+  s=s.split('\n').filter(line=>!/^\s*%/.test(line) && !/^\s*\\(?:documentclass|usepackage|begin\{document\}|end\{document\}|pagestyle|thispagestyle|hypersetup|setlength|renewcommand|newcommand|titleformat|titlespacing)/.test(line)).join('\n');
+  // Common text-mode LaTeX that often appears in teacher solutions.
+  s=s.replace(/\\noindent\b/g,'').replace(/\\par\b/g,'\n');
+  s=s.replace(/\\(?:section|subsection)\*?\{([^{}]*)\}/g,'\n$1\n');
+  s=s.replace(/\\textbf\{([^{}]*)\}/g,'$1').replace(/\\emph\{([^{}]*)\}/g,'$1');
+  return s;
+}
+function latexToHtml(input=''){
+  const s=normalizeLatexText(input);
+  let out='', i=0, buf='';
+  const flush=()=>{ if(!buf)return; let t=escapeHtml(buf); t=t.replace(/\\\\/g,'<br>').replace(/\n/g,'<br>'); out+=t; buf=''; };
+  while(i<s.length){
+    let start=null,end=null,open='',close='';
+    if(s.startsWith('$$',i)){start=i;open='$$';close='$$';end=s.indexOf('$$',i+2);}
+    else if(s.startsWith('\\[',i)){start=i;open='\\[';close='\\]';end=s.indexOf('\\]',i+2);}
+    else if(s.startsWith('\\(',i)){start=i;open='\\(';close='\\)';end=s.indexOf('\\)',i+2);}
+    else if(s[i]==='$'){start=i;open='$';close='$';let j=i+1;while(j<s.length){if(s[j]==='$'&&s[j-1]!=='\\'){end=j;break}j++;}}
+    if(start===null||end===-1||end===null){buf+=s[i++];continue}
+    flush(); out+=escapeHtml(s.slice(start,end+close.length)); i=end+close.length;
+  }
+  flush(); return out;
+}
+async function renderMath(root=document.body){
+  if(!window.MathJax?.typesetPromise)return;
+  try{window.MathJax.typesetClear?.([root]); await window.MathJax.typesetPromise([root]);}catch(e){console.warn('MathJax render error',e)}
+}
+function fallbackLayout(q={}){
+  const src=String(q.source||''); const n=String(q.examNumber||'').match(/\d+/)?.[0]||'';
+  const key=(src.includes('海淀')?'HD':src.includes('北京卷')?'BJ':'')+'-'+n;
+  const m={
+    'HD-1':{imagePlacement:'right',align:'top',imageMaxWidthMm:34,textWrap:true,keepWithStem:true},
+    'HD-3':{imagePlacement:'right',align:'top',imageMaxWidthMm:42,textWrap:true,keepWithStem:true},
+    'HD-7':{imagePlacement:'below',align:'center',imageMaxWidthMm:125,keepWithStem:true},
+    'HD-15':{imagePlacement:'right',align:'top',imageMaxWidthMm:45,textWrap:true,keepWithStem:true},
+    'HD-19':{imagePlacement:'right',align:'top',imageMaxWidthMm:48,textWrap:true,keepWithStem:true},
+    'BJ-10':{imagePlacement:'right',align:'top',imageMaxWidthMm:46,textWrap:true,keepWithStem:true},
+    'BJ-14':{imagePlacement:'right',align:'top',imageMaxWidthMm:42,textWrap:true,keepWithStem:true},
+    'BJ-18':{imagePlacement:'right',align:'top',imageMaxWidthMm:54,textWrap:true,keepWithStem:true}
+  };
+  return m[key]||{};
+}
+function effectiveLayout(q={}){const fb=fallbackLayout(q);const db=(q.layout&&typeof q.layout==='object')?q.layout:{};return {...fb,...db}}
+function imageBoxStyle(layout={}){const mm=Number(layout.imageMaxWidthMm);const ratio=Number(layout.imageWidthRatio);if(Number.isFinite(mm)){const x=Math.max(20,Math.min(180,mm));return `width:${x}mm;max-width:${x}mm;flex:0 0 ${x}mm;`;}if(Number.isFinite(ratio)){const x=Math.max(10,Math.min(100,ratio*100));return `width:${x}%;max-width:${x}%;flex:0 0 ${x}%;`;}return 'max-width:100%;'}
+function imageHtml(images=[],layout={}){if(!images?.length)return '';const p=layout.imagePlacement||'below';const cls=`question-images placement-${p} align-${layout.align||'left'}`;const st=imageBoxStyle(layout);return `<div class="${cls}" style="${st}">${images.map(src=>`<img src="${escapeHtml(src)}" loading="lazy" alt="题目配图">`).join('')}</div>`}
+function isHaidianQ7(q={}){return /海淀/.test(String(q.source||''))&&String(q.examNumber||'')==='7'}
+function questionBodyHtml(q){const layout=effectiveLayout(q);const stem=`<div class="math-content question-stem">${latexToHtml(q.stem)}</div>`;let imgs='';if(q.stemImages?.length){if(isHaidianQ7(q)&&q.stemImages.length>1){imgs=`<div class="question-images haidian-q7-grid">${q.stemImages.slice(0,4).map(src=>`<img src="${escapeHtml(src)}" loading="lazy" alt="选项图">`).join('')}</div>`;}else{imgs=imageHtml(q.stemImages,layout)}}const p=layout.imagePlacement||'below';return (p==='right'||p==='left')?`<div class="question-flow flow-${p}">${stem}${imgs}</div>`:`${stem}${imgs}`}
+function refreshImagePreview(kind){const arr=kind==='stem'?draftStemImages:draftSolutionImages;const el=$(kind==='stem'?'#stemImagePreview':'#solutionImagePreview');if(!el)return;el.innerHTML=arr.map((src,i)=>`<div class="image-chip"><img src="${escapeHtml(src)}"><button type="button" data-img-kind="${kind}" data-img-index="${i}">×</button></div>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.imgKind==='stem'?draftStemImages:draftSolutionImages;a.splice(Number(b.dataset.imgIndex),1);refreshImagePreview(b.dataset.imgKind)})}
+async function filesToDataUrls(fileList){const files=[...fileList];if(files.length>6)throw new Error('一次最多上传 6 张图片');const out=[];for(const f of files){if(f.size>1_800_000)throw new Error(`图片 ${f.name} 超过 1.8MB，请先压缩`);if(!/^image\//.test(f.type))throw new Error(`${f.name} 不是图片文件`);out.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)}));}return out}
+function stripTex(s=''){return s.replace(/\\[a-zA-Z]+/g,'').replace(/[${}]/g,'').slice(0,120)}
+function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function savePaper(){localStorage.setItem('tijian-paper',JSON.stringify(paperIds));renderPaperBadge()}
+function renderPaperBadge(){$('#paperBadge').textContent=paperIds.length}
+function validateImportPayload(obj){
+  const qs=Array.isArray(obj)?obj:(Array.isArray(obj?.questions)?obj.questions:[]);
+  if(!qs.length)throw new Error('文件中没有找到 questions 数组');
+  if(qs.length>500)throw new Error('一次最多导入 500 道题');
+  return {questions:qs,meta:obj?.meta||obj?.source||{}};
+}
+function renderImportPreview(){
+  const el=$('#importPreview');
+  if(!importPayload){el.textContent='尚未选择文件';return}
+  const qs=importPayload.questions;
+  const exams=[...new Set(qs.map(q=>q.source).filter(Boolean))];
+  const chapters=[...new Set(qs.map(q=>q.chapter||q.topic).filter(Boolean))];
+  el.innerHTML=`<b>识别到 ${qs.length} 道题</b><div>试卷：${escapeHtml(exams.slice(0,3).join('、')||'未填写')}</div><div>章节：${escapeHtml(chapters.slice(0,6).join('、')||'未填写')}</div><div class="mini">前 5 题：${qs.slice(0,5).map(q=>escapeHtml(`${q.examNumber||''} ${q.title||'未命名'}`)).join('；')}</div>`;
+}
+function openImport(){importPayload=null;$('#importFile').value='';$('#importResult').textContent='';$('#doImport').disabled=true;renderImportPreview();$('#importModal').classList.remove('hidden')}
+async function handleImportFile(file){
+  try{
+    if(!file)return;
+    if(file.size>12_000_000)throw new Error('导入文件超过 12MB');
+    const text=await file.text();
+    importPayload=validateImportPayload(JSON.parse(text));
+    renderImportPreview();$('#doImport').disabled=false;$('#importResult').textContent='文件检查通过，可以开始导入。';
+  }catch(e){importPayload=null;$('#doImport').disabled=true;$('#importResult').textContent='读取失败：'+e.message;renderImportPreview()}
+}
+async function doBatchImport(){
+  if(!importPayload)return;
+  const btn=$('#doImport');btn.disabled=true;btn.textContent='正在导入…';$('#importResult').textContent='';
+  try{
+    const d=await api('/api/import/questions',{method:'POST',body:JSON.stringify({questions:importPayload.questions,onDuplicate:$('#duplicateMode').value})});
+    $('#importResult').textContent=`完成：新增 ${d.imported}，覆盖 ${d.replaced}，跳过 ${d.skipped}，失败 ${d.failed}。`;
+    await loadQuestions();
+  }catch(e){$('#importResult').textContent='导入失败：'+e.message}
+  finally{btn.disabled=false;btn.textContent='开始导入'}
+}
+async function login(){try{const d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});me=d.user;showApp();await loadQuestions()}catch(e){$('#loginError').textContent=e.message}}
+async function showApp(){if(!me){try{me=(await api('/api/me')).user}catch{return}}$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#userName').textContent=`${me.name} · ${me.role==='admin'?'管理员':'教师'}`;if(me.role==='admin')$('#navUsers').classList.remove('hidden');renderPaperBadge()}
+async function loadQuestions(){try{questions=(await api('/api/questions')).questions;paperIds=paperIds.filter(id=>questions.some(q=>q.id===id));savePaper();renderAll()}catch(e){if(e.message==='未登录')location.reload()}}
+function naturalExamNo(v=''){const m=String(v).match(/\d+/);return m?Number(m[0]):9999}
+function renderTopics(){
+  const counts={}; let field='topic'; let title='知识板块';
+  if(bankMode==='chapter'){field='chapter';title='章节分类'}
+  if(bankMode==='exam'){field='source';title='来源试卷'}
+  questions.forEach(q=>{const k=q[field]||'未分类';counts[k]=(counts[k]||0)+1});
+  $('#classifyTitle').textContent=title;
+  $('#topics').innerHTML='<div class="topic '+(!topicFilter?'active':'')+'" data-topic="">全部题目 <span>'+questions.length+'</span></div>'+Object.entries(counts).sort((a,b)=>a[0].localeCompare(b[0],'zh-CN')).map(([k,v])=>`<div class="topic ${topicFilter===k?'active':''}" data-topic="${escapeHtml(k)}">${escapeHtml(k)} <span>${v}</span></div>`).join('');
+  document.querySelectorAll('.topic').forEach(x=>x.onclick=()=>{topicFilter=x.dataset.topic;renderAll()})
+}
+function filtered(){
+  const s=$('#search').value.trim().toLowerCase(),t=$('#typeFilter').value,d=$('#difficultyFilter').value;
+  let fs=questions.filter(q=>{
+    const classValue=bankMode==='chapter'?(q.chapter||q.topic):bankMode==='exam'?q.source:q.topic;
+    return (!topicFilter||classValue===topicFilter)&&(!t||q.type===t)&&(!d||q.difficulty===d)&&(!s||[q.title,q.stem,q.source,q.topic,q.chapter,q.examNumber,...q.tags].join(' ').toLowerCase().includes(s))
+  });
+  if(bankMode==='exam'&&topicFilter) fs=[...fs].sort((x,y)=>naturalExamNo(x.examNumber)-naturalExamNo(y.examNumber)||String(x.examNumber).localeCompare(String(y.examNumber),'zh-CN'));
+  return fs
+}
+function renderList(){const fs=filtered();$('#foundText').textContent=`找到 ${fs.length} 道题`;$('#countBadge').textContent=questions.length;$('#questionList').innerHTML=fs.map(q=>`<article class="q-card ${selectedId===q.id?'active':''}" data-id="${q.id}"><div class="q-meta"><span class="pill">${escapeHtml(q.type)}</span>${escapeHtml(q.grade)} · ${escapeHtml(q.source)}${q.examNumber?` · 第${escapeHtml(q.examNumber)}题`:''}</div><h4>${escapeHtml(q.title)}</h4><div class="q-preview">${escapeHtml(stripTex(q.stem))}</div><div class="q-foot"><span>${escapeHtml(q.chapter||q.topic)} / ${escapeHtml(q.topic)}</span><span class="difficulty">${escapeHtml(q.difficulty)}</span></div></article>`).join('')||'<div class="empty" style="height:200px">没有匹配题目</div>';document.querySelectorAll('.q-card').forEach(x=>x.onclick=()=>{selectedId=x.dataset.id;renderAll()})}
+function paperButton(q){const added=paperIds.includes(q.id);return `<button id="paperAction" class="ghost ${added?'added-paper':'add-paper'}">${added?'✓ 已加入试卷':'＋ 加入试卷'}</button>`}
+function renderDetail(){const q=questions.find(x=>x.id===selectedId)||filtered()[0];if(!q){$('#detail').innerHTML='<div class="empty">选择左侧题目查看详情</div>';return}selectedId=q.id;$('#detail').innerHTML=`<div class="detail-tools">${paperButton(q)}<button id="editAction" class="ghost">编辑题目</button></div><div class="detail-top"><div><div class="q-meta"><span class="pill">${escapeHtml(q.type)}</span>${escapeHtml(q.grade)}　<span class="pill">${escapeHtml(q.difficulty)}</span></div><h3>${escapeHtml(q.title)}</h3><div class="detail-source">章节：${escapeHtml(q.chapter||q.topic)}　·　知识板块：${escapeHtml(q.topic)}</div><div class="detail-source">来源试卷：${escapeHtml(q.source)}${q.examNumber?`　·　第 ${escapeHtml(q.examNumber)} 题`:''}</div></div><div class="detail-source">更新于 ${new Date(q.updatedAt).toLocaleString()}</div></div><div class="detail-block"><h5>题目</h5>${questionBodyHtml(q)}</div><div class="answer-box"><h5>答案</h5><div class="math-content">${latexToHtml(q.answer)}</div><hr style="border:0;border-top:1px solid #dce6f2;margin:18px 0"><h5>解析</h5><div class="math-content">${latexToHtml(q.solution)}</div>${imageHtml(q.solutionImages)}</div><div class="tags">${q.tags.map(t=>`<span class="tag"># ${escapeHtml(t)}</span>`).join('')}<span class="tag">录入：${escapeHtml(q.createdBy)}</span><span class="tag">最近编辑：${escapeHtml(q.updatedBy)}</span></div>`;$('#paperAction').onclick=()=>togglePaper(q.id);$('#editAction').onclick=()=>openEdit(q);renderMath($('#detail'))}
+function renderAll(){if(!['bank','chapters','exams'].includes(currentPage))return;renderTopics();renderList();renderDetail()}
+function switchPage(page){
+  if(page==='chapters'||page==='exams'||page==='bank'){
+    currentPage=page; bankMode=page==='chapters'?'chapter':page==='exams'?'exam':'all'; topicFilter='';
+    $('#bankPage').classList.remove('hidden'); $('#paperPage').classList.add('hidden'); $('#usersPage').classList.add('hidden');
+  } else {currentPage=page;$('#bankPage').classList.add('hidden');$('#paperPage').classList.toggle('hidden',page!=='paper');$('#usersPage').classList.toggle('hidden',page!=='users')}
+  ['Bank','Chapters','Exams','Paper','Users'].forEach(n=>$('#nav'+n)?.classList.remove('active'));
+  $('#nav'+page[0].toUpperCase()+page.slice(1))?.classList.add('active');
+  $('#topicArea').classList.toggle('hidden',page==='paper'||page==='users');$('#addBtn').classList.toggle('hidden',page==='users');
+  const map={bank:['SHARED QUESTION BANK','共享题库'],chapters:['BROWSE BY CHAPTER','按章节浏览'],exams:['BROWSE BY EXAM','按试卷浏览'],paper:['PAPER BUILDER','选题组卷'],users:['USER MANAGEMENT','教师账号']};
+  $('#eyebrow').textContent=map[page][0];$('#pageTitle').textContent=map[page][1];
+  if(['bank','chapters','exams'].includes(page))renderAll();if(page==='paper')renderPaper();if(page==='users')loadUsers()
+}
+function togglePaper(id){paperIds=paperIds.includes(id)?paperIds.filter(x=>x!==id):[...paperIds,id];savePaper();renderDetail();if(currentPage==='paper')renderPaper()}
+function renderPaper(){const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);$('#paperCountText').textContent=`${qs.length} 道题`;$('#paperList').innerHTML=qs.length?qs.map((q,i)=>`<div class="paper-item"><div class="paper-num">${i+1}.</div><div class="paper-main"><h4>${escapeHtml(q.title)}</h4>${questionBodyHtml(q)}<div class="mini">${escapeHtml(q.type)} · ${escapeHtml(q.source)}</div></div><div class="paper-row-actions"><button class="ghost tiny" data-up="${q.id}">↑</button><button class="ghost tiny" data-down="${q.id}">↓</button><button class="danger tiny" data-remove="${q.id}">移除</button></div></div>`).join(''):'<div class="empty" style="height:220px">还没有选题。回到共享题库，点击“加入试卷”。</div>';document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>togglePaper(b.dataset.remove));document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>movePaper(b.dataset.up,-1));document.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>movePaper(b.dataset.down,1));renderMath($('#paperList'))}
+function movePaper(id,dir){const i=paperIds.indexOf(id),j=i+dir;if(i<0||j<0||j>=paperIds.length)return;[paperIds[i],paperIds[j]]=[paperIds[j],paperIds[i]];savePaper();renderPaper()}
+function openCreate(){editingId=null;draftStemImages=[];draftSolutionImages=[];$('#modalTitle').textContent='录入新题';['fTitle','fSource','fExamNumber','fStem','fAnswer','fSolution','fTags'].forEach(id=>$('#'+id).value='');$('#fChapter').value='函数';$('#fTopic').value='函数与导数';$('#fType').value='解答题';$('#fDifficulty').value='中档';$('#fGrade').value='高三';$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');$('#deleteQuestion').classList.add('hidden');$('#modal').classList.remove('hidden')}
+function openEdit(q){editingId=q.id;draftStemImages=[...(q.stemImages||[])];draftSolutionImages=[...(q.solutionImages||[])];$('#modalTitle').textContent='编辑题目';$('#fTitle').value=q.title;$('#fChapter').value=q.chapter||q.topic;$('#fTopic').value=q.topic;$('#fType').value=q.type;$('#fDifficulty').value=q.difficulty;$('#fGrade').value=q.grade;$('#fTags').value=(q.tags||[]).join(', ');$('#fSource').value=q.source;$('#fExamNumber').value=q.examNumber||'';$('#fStem').value=q.stem;$('#fAnswer').value=q.answer;$('#fSolution').value=q.solution;$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');$('#deleteQuestion').classList.toggle('hidden',me.role!=='admin');$('#modal').classList.remove('hidden')}
+async function saveQuestion(){const b={title:$('#fTitle').value,chapter:$('#fChapter').value,topic:$('#fTopic').value,type:$('#fType').value,difficulty:$('#fDifficulty').value,grade:$('#fGrade').value,tags:$('#fTags').value,source:$('#fSource').value,examNumber:$('#fExamNumber').value,stem:$('#fStem').value,answer:$('#fAnswer').value,solution:$('#fSolution').value,stemImages:draftStemImages,solutionImages:draftSolutionImages,layout:(questions.find(x=>x.id===editingId)?.layout||{})};if(!b.title||!b.stem)return alert('请至少填写标题和题干');try{const d=await api(editingId?`/api/questions/${encodeURIComponent(editingId)}`:'/api/questions',{method:editingId?'PUT':'POST',body:JSON.stringify(b)});$('#modal').classList.add('hidden');selectedId=d.question.id;await loadQuestions()}catch(e){alert(e.message)}}
+async function deleteQuestion(){if(!editingId||!confirm('确定删除这道题吗？此操作不可撤销。'))return;try{await api(`/api/questions/${encodeURIComponent(editingId)}`,{method:'DELETE'});paperIds=paperIds.filter(x=>x!==editingId);savePaper();selectedId=null;$('#modal').classList.add('hidden');await loadQuestions()}catch(e){alert(e.message)}}
+async function loadUsers(){if(me.role!=='admin')return;try{users=(await api('/api/users')).users;renderUsers()}catch(e){alert(e.message)}}
+function renderUsers(){$('#userList').innerHTML=users.map(u=>`<div class="user-row"><div class="user-info"><b>${escapeHtml(u.name)} <span class="pill">${u.role==='admin'?'管理员':'教师'}</span></b><span>用户名：${escapeHtml(u.username)} · ${u.active?'启用':'已停用'}</span></div>${u.role==='teacher'?`<button class="ghost tiny" data-active="${u.id}" data-next="${u.active?'0':'1'}">${u.active?'停用':'启用'}</button>`:''}</div>`).join('');document.querySelectorAll('[data-active]').forEach(b=>b.onclick=()=>toggleUser(b.dataset.active,b.dataset.next==='1'))}
+async function createTeacher(){const b={username:$('#newUsername').value,name:$('#newName').value,password:$('#newPassword').value};try{await api('/api/users',{method:'POST',body:JSON.stringify(b)});$('#userMsg').textContent='教师账号已创建。';$('#newUsername').value=$('#newName').value=$('#newPassword').value='';await loadUsers()}catch(e){$('#userMsg').textContent=e.message}}
+async function toggleUser(id,active){try{await api(`/api/users/${id}`,{method:'PATCH',body:JSON.stringify({active})});await loadUsers()}catch(e){alert(e.message)}}
+function printQuestionBody(q){const layout=effectiveLayout(q);const p=layout.imagePlacement||'below';const st=imageBoxStyle(layout);let imgs='';if(q.stemImages?.length){if(isHaidianQ7(q)&&q.stemImages.length>1){imgs=`<div class="imgs haidian-q7-grid-print">${q.stemImages.slice(0,4).map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`;}else{imgs=`<div class="imgs placement-${p}" style="${st}">${q.stemImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`}}const stem=`<div class="stem">${latexToHtml(q.stem)}</div>`;return (p==='right'||p==='left')?`<div class="qflow ${p}">${stem}${imgs}</div>`:`${stem}${imgs}`}
+function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true,macros:{vv:['\\\\overrightarrow{#1}',1],bm:['\\\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>body{font-family:'Microsoft YaHei',sans-serif;max-width:800px;margin:36px auto;color:#111;line-height:1.85}h1{text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:28px}.q{margin:14px 0;page-break-inside:avoid;break-inside:avoid}.num{font-weight:bold;margin-right:8px}.meta{font-size:12px;color:#777;margin-top:4px}.qflow{display:flex;gap:8mm;align-items:flex-start}.qflow.right .stem{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:4mm;width:125mm;max-width:125mm;margin:4mm 0!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.placement-right,.placement-left{justify-content:flex-start}@page{margin:16mm}</style></head><body><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><span class="num">${i+1}.</span>${printQuestionBody(q)}</div>`).join('')}</body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+
+$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
+$('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');e.target.value=''}catch(err){alert(err.message)}});
+$('#fSolutionImages').addEventListener('change',async e=>{try{draftSolutionImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('solution');e.target.value=''}catch(err){alert(err.message)}});
+(async()=>{try{me=(await api('/api/me')).user;await showApp();await loadQuestions()}catch{}})();setInterval(()=>{if(me&&currentPage==='bank')loadQuestions()},15000);

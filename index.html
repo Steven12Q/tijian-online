@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>题笺 Online · 高中数学共享题库</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        macros: {
+          vv: ['\\overrightarrow{#1}', 1],
+          bm: ['\\boldsymbol{#1}', 1]
+        }
+      },
+      options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+<div id="login" class="login-screen">
+  <div class="login-card">
+    <div class="brand-mark">∑</div>
+    <h1>题笺 Online</h1>
+    <p>多人共享高中数学题库</p>
+    <input id="username" placeholder="用户名" autocomplete="username">
+    <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+    <button id="loginBtn" class="primary full">登录</button>
+    <div id="loginError" class="error"></div>
+    <div class="demo-hint">管理员可创建教师账号；教师可录题、编辑和组卷。</div>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark sm">∑</div><div><div class="brand-name">题笺 <span>ONLINE</span></div><div class="brand-sub">高中数学共享题库</div></div></div>
+    <nav>
+      <button id="navBank" class="nav active">▣　共享题库 <span id="countBadge">0</span></button>
+      <button id="navChapters" class="nav">▦　按章节</button>
+      <button id="navExams" class="nav">▧　按试卷</button>
+      <button id="navPaper" class="nav">▤　选题组卷 <span id="paperBadge">0</span></button>
+      <button id="navUsers" class="nav hidden">♙　教师账号</button>
+    </nav>
+    <div id="topicArea"><div id="classifyTitle" class="side-title">知识板块</div><div id="topics" class="topics"></div></div>
+    <div class="side-footer"><div class="cloud-dot"></div><span>云端数据库已连接</span></div>
+  </aside>
+  <main>
+    <header>
+      <div><div id="eyebrow" class="eyebrow">SHARED QUESTION BANK</div><h2 id="pageTitle">共享题库</h2></div>
+      <div class="header-actions"><div class="sync"><b>●</b> 自动同步</div><div id="userName" class="user"></div><button id="logoutBtn" class="ghost">退出</button><button id="importBtn" class="ghost">⇧ 批量导入</button><button id="addBtn" class="primary">＋ 录入题目</button></div>
+    </header>
+
+    <section id="bankPage" class="page-section">
+      <div class="toolbar"><div class="search-wrap">⌕<input id="search" placeholder="搜索题目、公式、标签或来源"></div><select id="typeFilter"><option value="">全部题型</option><option>单选题</option><option>填空题</option><option>解答题</option></select><select id="difficultyFilter"><option value="">全部难度</option><option>基础</option><option>中档</option><option>较难</option><option>压轴</option></select></div>
+      <div class="workspace"><section class="list-pane"><div class="list-head"><span id="foundText">找到 0 道题</span><span>最新更新</span></div><div id="questionList" class="question-list"></div></section><section id="detail" class="detail-pane"><div class="empty">选择左侧题目查看详情</div></section></div>
+    </section>
+
+    <section id="paperPage" class="page-section hidden scroll-page">
+      <div class="paper-layout"><div class="paper-panel"><h3>试卷设置</h3><label>试卷标题<input id="paperTitle" value="高中数学练习"></label><label>副标题<input id="paperSubtitle" placeholder="如：函数与导数专题"></label><div class="paper-actions"><button id="clearPaper" class="ghost">清空选题</button><button id="printPaper" class="primary">打印 / 保存 PDF</button></div></div><div class="paper-panel grow"><div class="panel-title"><h3>已选题目</h3><span id="paperCountText">0 道题</span></div><div id="paperList"></div></div></div>
+    </section>
+
+    <section id="usersPage" class="page-section hidden scroll-page">
+      <div class="users-grid"><div class="paper-panel"><h3>新增教师账号</h3><label>用户名<input id="newUsername" placeholder="如 zhanglaoshi"></label><label>教师姓名<input id="newName" placeholder="如 张老师"></label><label>初始密码<input id="newPassword" type="password" placeholder="至少 8 位"></label><button id="createTeacher" class="primary full">创建教师账号</button><div id="userMsg" class="small-msg"></div></div><div class="paper-panel grow"><div class="panel-title"><h3>现有账号</h3><span>管理员 + 教师</span></div><div id="userList"></div></div></div>
+    </section>
+  </main>
+</div>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card"><div class="modal-head"><h3 id="modalTitle">录入新题</h3><button id="closeModal">×</button></div><div class="form-grid">
+    <label>标题<input id="fTitle"></label><label>章节分类<input id="fChapter" value="函数"></label>
+    <label>知识板块<input id="fTopic" value="函数与导数"></label><label>原试卷题号<input id="fExamNumber" placeholder="如 15 或 21(2)"></label>
+    <label>题型<select id="fType"><option>单选题</option><option>填空题</option><option selected>解答题</option></select></label><label>难度<select id="fDifficulty"><option>基础</option><option selected>中档</option><option>较难</option><option>压轴</option></select></label>
+    <label>年级<select id="fGrade"><option>高一</option><option>高二</option><option selected>高三</option></select></label><label>标签<input id="fTags" placeholder="导数, 零点, 参数"></label>
+    <label class="span2">来源试卷<input id="fSource" placeholder="如：2025-2026 海淀区高三期中 / 2026 北京高考"></label>
+    <label class="span2">题干（LaTeX）<textarea id="fStem" rows="6" placeholder="可直接粘贴常见 LaTeX；支持 $...$、\(...\)、\[...\]、aligned、cases、matrix、\vv 等"></textarea></label>
+    <label class="span2">题目配图<input id="fStemImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">支持 PNG/JPG/WebP/SVG，可一次选多张。单张建议不超过 1.5MB。</small><div id="stemImagePreview" class="image-preview"></div></label>
+    <label class="span2">答案<textarea id="fAnswer" rows="2"></textarea></label>
+    <label class="span2">解析（LaTeX）<textarea id="fSolution" rows="6"></textarea></label>
+    <label class="span2">解析配图<input id="fSolutionImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">几何图、函数图、统计图、TikZ 编译后的图片都可以上传。</small><div id="solutionImagePreview" class="image-preview"></div></label>
+  </div><div class="modal-actions"><button id="deleteQuestion" class="danger hidden">删除题目</button><span class="spacer"></span><button id="saveQuestion" class="primary">保存到共享题库</button></div></div>
+</div>
+
+<div id="importModal" class="modal hidden">
+  <div class="modal-card import-card">
+    <div class="modal-head"><h3>批量导入试卷</h3><button id="closeImportModal">×</button></div>
+    <div class="import-help">上传题笺导入文件（JSON）。一套试卷可一次导入几十道题；章节、来源试卷、原题号、答案、解析和配图都会一并保存。</div>
+    <label class="import-file">选择导入文件<input id="importFile" type="file" accept="application/json,.json,.tijian"></label>
+    <div id="importPreview" class="import-preview">尚未选择文件</div>
+    <label>遇到相同题目 ID
+      <select id="duplicateMode"><option value="skip">跳过已有题目（推荐）</option><option value="replace">用导入内容覆盖已有题目</option></select>
+    </label>
+    <div id="importResult" class="small-msg"></div>
+    <div class="modal-actions"><span class="spacer"></span><button id="doImport" class="primary" disabled>开始导入</button></div>
+  </div>
+</div>
+</body>
+</html>
