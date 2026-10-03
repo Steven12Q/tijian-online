@@ -274,6 +274,48 @@ const server = http.createServer(async (req, res) => {
       const row = rows[0]; row.created_by_name=u.name; row.updated_by_name=u.name;
       return json(res, 201, { question: questionFromRow(row) });
     }
+    if (url.pathname === '/api/import/questions' && req.method === 'POST') {
+      const u = await requireUser(req, res); if (!u) return;
+      const b = await readBody(req);
+      const items = Array.isArray(b.questions) ? b.questions : [];
+      const onDuplicate = b.onDuplicate === 'replace' ? 'replace' : 'skip';
+      if (!items.length) return json(res, 400, { error: '导入文件中没有题目' });
+      if (items.length > 500) return json(res, 400, { error: '一次最多导入 500 道题' });
+      const summary = { total: items.length, imported: 0, replaced: 0, skipped: 0, failed: 0, errors: [] };
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (let i=0;i<items.length;i++) {
+          try {
+            const raw = items[i] || {};
+            const q = cleanQuestionBody(raw);
+            if (!q.title || !q.stem) throw new Error('缺少标题或题干');
+            const requestedId = String(raw.id || '').trim();
+            const id = requestedId && /^[A-Za-z0-9_.:-]{3,120}$/.test(requestedId) ? requestedId : `Q-${Date.now()}-${i}-${crypto.randomBytes(2).toString('hex')}`;
+            const exists = await client.query('SELECT id FROM questions WHERE id=$1', [id]);
+            if (exists.rows[0]) {
+              if (onDuplicate === 'skip') { summary.skipped++; continue; }
+              await client.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,updated_by=$16,updated_at=NOW() WHERE id=$1`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+              summary.replaced++;
+            } else {
+              await client.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,created_by,updated_by)
+                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$16)`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
+              summary.imported++;
+            }
+          } catch (e) {
+            summary.failed++;
+            summary.errors.push({ index:i+1, message:String(e.message||e).slice(0,180) });
+          }
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally { client.release(); }
+      return json(res, 200, summary);
+    }
     const qm = url.pathname.match(/^\/api\/questions\/([^/]+)$/);
     if (qm && req.method === 'PUT') {
       const u = await requireUser(req, res); if (!u) return;

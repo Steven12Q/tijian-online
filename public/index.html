@@ -52,7 +52,7 @@
   <main>
     <header>
       <div><div id="eyebrow" class="eyebrow">SHARED QUESTION BANK</div><h2 id="pageTitle">共享题库</h2></div>
-      <div class="header-actions"><div class="sync"><b>●</b> 自动同步</div><div id="userName" class="user"></div><button id="logoutBtn" class="ghost">退出</button><button id="addBtn" class="primary">＋ 录入题目</button></div>
+      <div class="header-actions"><div class="sync"><b>●</b> 自动同步</div><div id="userName" class="user"></div><button id="logoutBtn" class="ghost">退出</button><button id="importBtn" class="ghost">⇧ 批量导入</button><button id="addBtn" class="primary">＋ 录入题目</button></div>
     </header>
 
     <section id="bankPage" class="page-section">
@@ -83,6 +83,20 @@
     <label class="span2">解析（LaTeX）<textarea id="fSolution" rows="6"></textarea></label>
     <label class="span2">解析配图<input id="fSolutionImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">几何图、函数图、统计图、TikZ 编译后的图片都可以上传。</small><div id="solutionImagePreview" class="image-preview"></div></label>
   </div><div class="modal-actions"><button id="deleteQuestion" class="danger hidden">删除题目</button><span class="spacer"></span><button id="saveQuestion" class="primary">保存到共享题库</button></div></div>
+</div>
+
+<div id="importModal" class="modal hidden">
+  <div class="modal-card import-card">
+    <div class="modal-head"><h3>批量导入试卷</h3><button id="closeImportModal">×</button></div>
+    <div class="import-help">上传题笺导入文件（JSON）。一套试卷可一次导入几十道题；章节、来源试卷、原题号、答案、解析和配图都会一并保存。</div>
+    <label class="import-file">选择导入文件<input id="importFile" type="file" accept="application/json,.json,.tijian"></label>
+    <div id="importPreview" class="import-preview">尚未选择文件</div>
+    <label>遇到相同题目 ID
+      <select id="duplicateMode"><option value="skip">跳过已有题目（推荐）</option><option value="replace">用导入内容覆盖已有题目</option></select>
+    </label>
+    <div id="importResult" class="small-msg"></div>
+    <div class="modal-actions"><span class="spacer"></span><button id="doImport" class="primary" disabled>开始导入</button></div>
+  </div>
 </div>
 </body>
 </html>

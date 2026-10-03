@@ -1,6 +1,7 @@
 let me=null, questions=[], selectedId=null, topicFilter='', currentPage='bank', bankMode='all', editingId=null, users=[];
 let paperIds=JSON.parse(localStorage.getItem('tijian-paper')||'[]');
 let draftStemImages=[], draftSolutionImages=[];
+let importPayload=null;
 const $=s=>document.querySelector(s);
 async function api(url,opts={}){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||'请求失败');return data}
 function normalizeLatexText(input=''){
@@ -39,6 +40,40 @@ function stripTex(s=''){return s.replace(/\\[a-zA-Z]+/g,'').replace(/[${}]/g,'')
 function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function savePaper(){localStorage.setItem('tijian-paper',JSON.stringify(paperIds));renderPaperBadge()}
 function renderPaperBadge(){$('#paperBadge').textContent=paperIds.length}
+function validateImportPayload(obj){
+  const qs=Array.isArray(obj)?obj:(Array.isArray(obj?.questions)?obj.questions:[]);
+  if(!qs.length)throw new Error('文件中没有找到 questions 数组');
+  if(qs.length>500)throw new Error('一次最多导入 500 道题');
+  return {questions:qs,meta:obj?.meta||obj?.source||{}};
+}
+function renderImportPreview(){
+  const el=$('#importPreview');
+  if(!importPayload){el.textContent='尚未选择文件';return}
+  const qs=importPayload.questions;
+  const exams=[...new Set(qs.map(q=>q.source).filter(Boolean))];
+  const chapters=[...new Set(qs.map(q=>q.chapter||q.topic).filter(Boolean))];
+  el.innerHTML=`<b>识别到 ${qs.length} 道题</b><div>试卷：${escapeHtml(exams.slice(0,3).join('、')||'未填写')}</div><div>章节：${escapeHtml(chapters.slice(0,6).join('、')||'未填写')}</div><div class="mini">前 5 题：${qs.slice(0,5).map(q=>escapeHtml(`${q.examNumber||''} ${q.title||'未命名'}`)).join('；')}</div>`;
+}
+function openImport(){importPayload=null;$('#importFile').value='';$('#importResult').textContent='';$('#doImport').disabled=true;renderImportPreview();$('#importModal').classList.remove('hidden')}
+async function handleImportFile(file){
+  try{
+    if(!file)return;
+    if(file.size>12_000_000)throw new Error('导入文件超过 12MB');
+    const text=await file.text();
+    importPayload=validateImportPayload(JSON.parse(text));
+    renderImportPreview();$('#doImport').disabled=false;$('#importResult').textContent='文件检查通过，可以开始导入。';
+  }catch(e){importPayload=null;$('#doImport').disabled=true;$('#importResult').textContent='读取失败：'+e.message;renderImportPreview()}
+}
+async function doBatchImport(){
+  if(!importPayload)return;
+  const btn=$('#doImport');btn.disabled=true;btn.textContent='正在导入…';$('#importResult').textContent='';
+  try{
+    const d=await api('/api/import/questions',{method:'POST',body:JSON.stringify({questions:importPayload.questions,onDuplicate:$('#duplicateMode').value})});
+    $('#importResult').textContent=`完成：新增 ${d.imported}，覆盖 ${d.replaced}，跳过 ${d.skipped}，失败 ${d.failed}。`;
+    await loadQuestions();
+  }catch(e){$('#importResult').textContent='导入失败：'+e.message}
+  finally{btn.disabled=false;btn.textContent='开始导入'}
+}
 async function login(){try{const d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('#username').value,password:$('#password').value})});me=d.user;showApp();await loadQuestions()}catch(e){$('#loginError').textContent=e.message}}
 async function showApp(){if(!me){try{me=(await api('/api/me')).user}catch{return}}$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#userName').textContent=`${me.name} · ${me.role==='admin'?'管理员':'教师'}`;if(me.role==='admin')$('#navUsers').classList.remove('hidden');renderPaperBadge()}
 async function loadQuestions(){try{questions=(await api('/api/questions')).questions;paperIds=paperIds.filter(id=>questions.some(q=>q.id===id));savePaper();renderAll()}catch(e){if(e.message==='未登录')location.reload()}}
@@ -90,7 +125,7 @@ async function createTeacher(){const b={username:$('#newUsername').value,name:$(
 async function toggleUser(id,active){try{await api(`/api/users/${id}`,{method:'PATCH',body:JSON.stringify({active})});await loadUsers()}catch(e){alert(e.message)}}
 function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true,macros:{vv:['\\\\overrightarrow{#1}',1],bm:['\\\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>body{font-family:'Microsoft YaHei',sans-serif;max-width:800px;margin:36px auto;color:#111;line-height:1.85}h1{text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:28px}.q{margin:22px 0;page-break-inside:avoid}.num{font-weight:bold;margin-right:8px}.meta{font-size:12px;color:#777;margin-top:6px}.imgs{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}.imgs img{max-width:100%;max-height:460px;object-fit:contain}@page{margin:18mm}</style></head><body><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><span class="num">${i+1}.</span><span>${latexToHtml(q.stem)}</span>${q.stemImages?.length?`<div class="imgs">${q.stemImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`:''}<div class="meta">${escapeHtml(q.type)} · ${escapeHtml(q.source)}</div></div>`).join('')}</body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
 
-$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
+$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
 $('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');e.target.value=''}catch(err){alert(err.message)}});
 $('#fSolutionImages').addEventListener('change',async e=>{try{draftSolutionImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('solution');e.target.value=''}catch(err){alert(err.message)}});
 (async()=>{try{me=(await api('/api/me')).user;await showApp();await loadQuestions()}catch{}})();setInterval(()=>{if(me&&currentPage==='bank')loadQuestions()},15000);
