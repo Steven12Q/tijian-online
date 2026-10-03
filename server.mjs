@@ -153,16 +153,17 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_questions_updated_at ON questions(updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);
-    CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter);
-    CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source);
   `);
+  // Upgrade existing databases first, then create indexes that depend on new columns.
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS stem_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS chapter TEXT NOT NULL DEFAULT '其他'`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS exam_number TEXT NOT NULL DEFAULT ''`);
-  await pool.query(`UPDATE questions SET chapter=topic WHERE chapter='其他' OR chapter=''`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS solution_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`UPDATE questions SET chapter=topic WHERE chapter='其他' OR chapter=''`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_updated_at ON questions(updated_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source)`);
 
   await pool.query(`DELETE FROM sessions WHERE expires_at <= NOW()`);
 
