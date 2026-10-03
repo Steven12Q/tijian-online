@@ -53,7 +53,7 @@ async function readBody(req) {
   let size = 0;
   for await (const c of req) {
     size += c.length;
-    if (size > 2_000_000) throw new Error('请求内容过大');
+    if (size > 15_000_000) throw new Error('请求内容过大');
     chunks.push(c);
   }
   const raw = Buffer.concat(chunks).toString('utf8');
@@ -78,6 +78,10 @@ async function currentUser(req) {
   `, [h]);
   return rows[0] || null;
 }
+function cleanImages(v) {
+  if (!Array.isArray(v)) return [];
+  return v.map(x => String(x || '')).filter(x => /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,/i.test(x) && x.length <= 2_600_000).slice(0, 6);
+}
 function cleanQuestionBody(b) {
   const tags = Array.isArray(b.tags)
     ? b.tags.map(x => String(x).trim()).filter(Boolean).slice(0, 20)
@@ -88,18 +92,23 @@ function cleanQuestionBody(b) {
     grade: String(b.grade || '高三').trim().slice(0, 50),
     difficulty: String(b.difficulty || '中档').trim().slice(0, 50),
     topic: String(b.topic || '其他').trim().slice(0, 100),
+    chapter: String(b.chapter || b.topic || '其他').trim().slice(0, 120),
     source: String(b.source || '手工录入').trim().slice(0, 300),
+    examNumber: String(b.examNumber || '').trim().slice(0, 40),
     tags,
     stem: String(b.stem || ''),
     answer: String(b.answer || ''),
-    solution: String(b.solution || '')
+    solution: String(b.solution || ''),
+    stemImages: cleanImages(b.stemImages),
+    solutionImages: cleanImages(b.solutionImages)
   };
 }
 function questionFromRow(r) {
   return {
     id: r.id, title: r.title, type: r.type, grade: r.grade,
-    difficulty: r.difficulty, topic: r.topic, source: r.source,
+    difficulty: r.difficulty, topic: r.topic, chapter: r.chapter || r.topic, source: r.source, examNumber: r.exam_number || '',
     tags: r.tags || [], stem: r.stem, answer: r.answer, solution: r.solution,
+    stemImages: r.stem_images || [], solutionImages: r.solution_images || [],
     createdBy: r.created_by_name || '未知', updatedBy: r.updated_by_name || '未知',
     createdAt: r.created_at, updatedAt: r.updated_at
   };
@@ -130,11 +139,15 @@ async function initDb() {
       grade TEXT NOT NULL,
       difficulty TEXT NOT NULL,
       topic TEXT NOT NULL,
+      chapter TEXT NOT NULL DEFAULT '其他',
       source TEXT NOT NULL,
+      exam_number TEXT NOT NULL DEFAULT '',
       tags JSONB NOT NULL DEFAULT '[]'::jsonb,
       stem TEXT NOT NULL,
       answer TEXT NOT NULL DEFAULT '',
       solution TEXT NOT NULL DEFAULT '',
+      stem_images JSONB NOT NULL DEFAULT '[]'::jsonb,
+      solution_images JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -142,7 +155,14 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_questions_updated_at ON questions(updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);
+    CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter);
+    CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source);
   `);
+  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS stem_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
+  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS chapter TEXT NOT NULL DEFAULT '其他'`);
+  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS exam_number TEXT NOT NULL DEFAULT ''`);
+  await pool.query(`UPDATE questions SET chapter=topic WHERE chapter='其他' OR chapter=''`);
+  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS solution_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
   await pool.query(`DELETE FROM sessions WHERE expires_at <= NOW()`);
 
@@ -247,9 +267,9 @@ const server = http.createServer(async (req, res) => {
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
       const id = `Q-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,source,tags,stem,answer,solution,created_by,updated_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$12) RETURNING *`,
-        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.source,JSON.stringify(q.tags),q.stem,q.answer,q.solution,u.id]);
+      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,created_by,updated_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$16) RETURNING *`,
+        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
       const row = rows[0]; row.created_by_name=u.name; row.updated_by_name=u.name;
       return json(res, 201, { question: questionFromRow(row) });
     }
@@ -258,8 +278,8 @@ const server = http.createServer(async (req, res) => {
       const u = await requireUser(req, res); if (!u) return;
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
-      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,source=$7,tags=$8::jsonb,stem=$9,answer=$10,solution=$11,updated_by=$12,updated_at=NOW() WHERE id=$1 RETURNING *`,
-        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.source,JSON.stringify(q.tags),q.stem,q.answer,q.solution,u.id]);
+      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,updated_by=$16,updated_at=NOW() WHERE id=$1 RETURNING *`,
+        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),u.id]);
       if (!rows[0]) return json(res, 404, { error: '题目不存在' });
       const row=rows[0];
       const names = await pool.query('SELECT name FROM users WHERE id=$1',[row.created_by]);

@@ -5,9 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>题笺 Online · 高中数学共享题库</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        macros: {
+          vv: ['\\overrightarrow{#1}', 1],
+          bm: ['\\boldsymbol{#1}', 1]
+        }
+      },
+      options: { skipHtmlTags: ['script','noscript','style','textarea','pre','code'] }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -29,10 +41,12 @@
     <div class="brand"><div class="brand-mark sm">∑</div><div><div class="brand-name">题笺 <span>ONLINE</span></div><div class="brand-sub">高中数学共享题库</div></div></div>
     <nav>
       <button id="navBank" class="nav active">▣　共享题库 <span id="countBadge">0</span></button>
+      <button id="navChapters" class="nav">▦　按章节</button>
+      <button id="navExams" class="nav">▧　按试卷</button>
       <button id="navPaper" class="nav">▤　选题组卷 <span id="paperBadge">0</span></button>
       <button id="navUsers" class="nav hidden">♙　教师账号</button>
     </nav>
-    <div id="topicArea"><div class="side-title">知识板块</div><div id="topics" class="topics"></div></div>
+    <div id="topicArea"><div id="classifyTitle" class="side-title">知识板块</div><div id="topics" class="topics"></div></div>
     <div class="side-footer"><div class="cloud-dot"></div><span>云端数据库已连接</span></div>
   </aside>
   <main>
@@ -58,11 +72,16 @@
 
 <div id="modal" class="modal hidden">
   <div class="modal-card"><div class="modal-head"><h3 id="modalTitle">录入新题</h3><button id="closeModal">×</button></div><div class="form-grid">
-    <label>标题<input id="fTitle"></label><label>知识板块<input id="fTopic" value="函数与导数"></label>
+    <label>标题<input id="fTitle"></label><label>章节分类<input id="fChapter" value="函数"></label>
+    <label>知识板块<input id="fTopic" value="函数与导数"></label><label>原试卷题号<input id="fExamNumber" placeholder="如 15 或 21(2)"></label>
     <label>题型<select id="fType"><option>单选题</option><option>填空题</option><option selected>解答题</option></select></label><label>难度<select id="fDifficulty"><option>基础</option><option selected>中档</option><option>较难</option><option>压轴</option></select></label>
     <label>年级<select id="fGrade"><option>高一</option><option>高二</option><option selected>高三</option></select></label><label>标签<input id="fTags" placeholder="导数, 零点, 参数"></label>
-    <label class="span2">来源<input id="fSource" placeholder="如：2026 北京高考"></label>
-    <label class="span2">题干（LaTeX）<textarea id="fStem" rows="6"></textarea></label><label class="span2">答案<textarea id="fAnswer" rows="2"></textarea></label><label class="span2">解析（LaTeX）<textarea id="fSolution" rows="6"></textarea></label>
+    <label class="span2">来源试卷<input id="fSource" placeholder="如：2025-2026 海淀区高三期中 / 2026 北京高考"></label>
+    <label class="span2">题干（LaTeX）<textarea id="fStem" rows="6" placeholder="可直接粘贴常见 LaTeX；支持 $...$、\(...\)、\[...\]、aligned、cases、matrix、\vv 等"></textarea></label>
+    <label class="span2">题目配图<input id="fStemImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">支持 PNG/JPG/WebP/SVG，可一次选多张。单张建议不超过 1.5MB。</small><div id="stemImagePreview" class="image-preview"></div></label>
+    <label class="span2">答案<textarea id="fAnswer" rows="2"></textarea></label>
+    <label class="span2">解析（LaTeX）<textarea id="fSolution" rows="6"></textarea></label>
+    <label class="span2">解析配图<input id="fSolutionImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">几何图、函数图、统计图、TikZ 编译后的图片都可以上传。</small><div id="solutionImagePreview" class="image-preview"></div></label>
   </div><div class="modal-actions"><button id="deleteQuestion" class="danger hidden">删除题目</button><span class="spacer"></span><button id="saveQuestion" class="primary">保存到共享题库</button></div></div>
 </div>
 </body>
