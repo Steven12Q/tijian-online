@@ -69,3 +69,13 @@
 
 /* v1.3.9 学生版/教师版导出 */
 .paper-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* v1.3.11 全局选择题排版 + 实线填空 */
+.fill-blank{
+  display:inline-block;
+  border-bottom:1.4px solid currentColor;
+  height:.9em;
+  vertical-align:-.08em;
+  min-width:42px;
+  margin:0 3px;
+}
