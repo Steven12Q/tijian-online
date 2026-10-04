@@ -66,3 +66,6 @@
 .question-images.align-center{margin-left:auto!important;margin-right:auto!important}.question-images.align-right{margin-left:auto!important}
 @media(max-width:900px){.layout-grid{grid-template-columns:1fr 1fr}.question-flow{display:block!important}.question-flow .question-images{margin-top:10px!important}}
 @media(max-width:560px){.layout-grid{grid-template-columns:1fr}}
+
+/* v1.3.9 学生版/教师版导出 */
+.paper-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}

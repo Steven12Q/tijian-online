@@ -223,8 +223,59 @@ async function loadUsers(){if(me.role!=='admin')return;try{users=(await api('/ap
 function renderUsers(){$('#userList').innerHTML=users.map(u=>`<div class="user-row"><div class="user-info"><b>${escapeHtml(u.name)} <span class="pill">${u.role==='admin'?'管理员':'教师'}</span></b><span>用户名：${escapeHtml(u.username)} · ${u.active?'启用':'已停用'}</span></div>${u.role==='teacher'?`<button class="ghost tiny" data-active="${u.id}" data-next="${u.active?'0':'1'}">${u.active?'停用':'启用'}</button>`:''}</div>`).join('');document.querySelectorAll('[data-active]').forEach(b=>b.onclick=()=>toggleUser(b.dataset.active,b.dataset.next==='1'))}
 async function createTeacher(){const b={username:$('#newUsername').value,name:$('#newName').value,password:$('#newPassword').value};try{await api('/api/users',{method:'POST',body:JSON.stringify(b)});$('#userMsg').textContent='教师账号已创建。';$('#newUsername').value=$('#newName').value=$('#newPassword').value='';await loadUsers()}catch(e){$('#userMsg').textContent=e.message}}
 async function toggleUser(id,active){try{await api(`/api/users/${id}`,{method:'PATCH',body:JSON.stringify({active})});await loadUsers()}catch(e){alert(e.message)}}
+
+function stripLatexForLength(s=''){
+  return String(s)
+    .replace(/\$+/g,'')
+    .replace(/\\dfrac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'$1/$2')
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?/g,'')
+    .replace(/[{}\\]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function splitStemChoices(stem=''){
+  const text=String(stem).replace(/\r/g,'');
+  // Supports A. / A、 / (A) / （A） and the Chinese full-width equivalents.
+  const re=/(?:^|\s|\n)(?:\(|（)?([ABCD])(?:\)|）|[\.．、])\s*/g;
+  const matches=[];
+  let m;
+  while((m=re.exec(text))!==null){
+    matches.push({letter:m[1],start:m.index,prefixEnd:re.lastIndex});
+  }
+  if(matches.length<4) return null;
+  // Keep the last complete A-B-C-D sequence to avoid accidental letters in prose.
+  let seq=null;
+  for(let i=0;i<=matches.length-4;i++){
+    if(matches[i].letter==='A'&&matches[i+1].letter==='B'&&matches[i+2].letter==='C'&&matches[i+3].letter==='D'){
+      seq=matches.slice(i,i+4);
+    }
+  }
+  if(!seq) return null;
+  const stemText=text.slice(0,seq[0].start).trim();
+  const options=seq.map((x,i)=>{
+    const end=i<3?seq[i+1].start:text.length;
+    return {letter:x.letter,text:text.slice(x.prefixEnd,end).trim()};
+  });
+  return {stemText,options};
+}
+function optionGridCols(options=[]){
+  const lens=options.map(o=>stripLatexForLength(o.text).length);
+  const total=lens.reduce((a,b)=>a+b,0);
+  const max=Math.max(...lens,0);
+  // Short options: 4 across. Medium/long: A B / C D.
+  // Extremely long options also stay at 2 columns so the visual rhythm remains AB / CD.
+  return (max<=18 && total<=62)?4:2;
+}
+function printStemHtml(q){
+  const split=splitStemChoices(q.stem);
+  if(!split) return `<div class="stem">${latexToHtml(q.stem)}</div>`;
+  const cols=optionGridCols(split.options);
+  const prompt=`<div class="stem stem-main">${latexToHtml(split.stemText)}</div>`;
+  const opts=`<div class="choice-grid cols-${cols}">${split.options.map(o=>`<div class="choice"><span class="choice-label">${o.letter}.</span><span class="choice-text">${latexToHtml(o.text)}</span></div>`).join('')}</div>`;
+  return prompt+opts;
+}
 function printQuestionBody(q){
-  const stem=`<div class="stem">${latexToHtml(q.stem)}</div>`;
+  const stem=printStemHtml(q);
   const layout=effectiveLayout(q);
   const p=layout.imagePlacement||'below';
   let imgs='';
@@ -236,9 +287,16 @@ function printQuestionBody(q){
   }
   return (p==='right'||p==='left')?`<div class="qflow ${p}">${stem}${imgs}</div>`:`${stem}${imgs}`;
 }
-function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true,macros:{vv:['\\overrightarrow{#1}',1],bm:['\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>*{box-sizing:border-box}html,body{padding:0;margin:0}body{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;color:#111;font-size:11.2pt;line-height:1.48}main{width:100%;margin:0 auto}h1{text-align:center;font-size:18pt;line-height:1.2;margin:0 0 3mm;font-weight:700}.sub{text-align:center;color:#444;font-size:10.5pt;line-height:1.3;margin:0 0 4mm}.q{display:grid;grid-template-columns:7mm minmax(0,1fr);column-gap:0;align-items:start;margin:0 0 3.2mm;page-break-inside:avoid;break-inside:avoid}.num{font-weight:700;line-height:1.48}.qcontent{min-width:0}.stem{line-height:1.48}.stem p{margin:0}.stem br{line-height:1.15}.qflow{display:flex;gap:4.5mm;align-items:flex-start}.qflow.right .stem{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:grid;grid-template-columns:repeat(var(--img-cols,1),minmax(0,1fr));gap:var(--img-gap,8px);margin:1.2mm 0 1.5mm}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.placement-right,.placement-left{justify-content:flex-start}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:3mm;width:145mm;max-width:100%;margin:1.5mm 0 2mm!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.print-hd-q7{width:94%;margin:1.5mm 0 2mm}.print-hd-q7 img{display:block;width:100%;height:auto}.print-hd-q15{display:grid;grid-template-columns:minmax(0,1fr) 42mm;gap:4mm;align-items:start}.print-hd-q15-img img{display:block;width:42mm;height:auto}mjx-container{margin-top:0!important;margin-bottom:0!important}@page{size:A4;margin:11mm 13mm 12mm}</style></head><body><main><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><div class="num">${i+1}.</div><div class="qcontent">${printQuestionBody(q)}</div></div>`).join('')}</main></body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+function teacherAnswerHtml(q){
+  const answer=q.answer?`<div class="teacher-answer"><b>答案：</b><span>${latexToHtml(q.answer)}</span></div>`:'';
+  const solution=q.solution?`<div class="teacher-solution"><b>解析：</b><div>${latexToHtml(q.solution)}</div></div>`:'';
+  const simgs=q.solutionImages?.length?`<div class="teacher-solution-images">${q.solutionImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`:'';
+  return `<div class="teacher-block">${answer}${solution}${simgs}</div>`;
+}
+function exportPaper(mode='student'){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const teacher=mode==='teacher';const versionText=teacher?'教师版':'学生版';const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true,macros:{vv:['\\overrightarrow{#1}',1],bm:['\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}-${versionText}</title>${mathConfig}<style>*{box-sizing:border-box}html,body{padding:0;margin:0}body{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;color:#111;font-size:11.2pt;line-height:1.45}main{width:100%;margin:0 auto}h1{text-align:center;font-size:18pt;line-height:1.2;margin:0 0 2.5mm;font-weight:700}.sub{text-align:center;color:#444;font-size:10.5pt;line-height:1.25;margin:0 0 3.5mm}.version{text-align:center;font-size:9.5pt;color:#666;margin:-2mm 0 3mm}.q{display:grid;grid-template-columns:7mm minmax(0,1fr);column-gap:0;align-items:start;margin:0 0 2.8mm;page-break-inside:avoid;break-inside:avoid}.num{font-weight:700;line-height:1.45}.qcontent{min-width:0}.stem{line-height:1.45}.stem p{margin:0}.stem br{line-height:1.1}.choice-grid{display:grid;width:100%;column-gap:5mm;row-gap:1.2mm;margin:1.3mm 0 .7mm;align-items:start}.choice-grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.choice-grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:1.5mm}.choice{display:flex;gap:1.2mm;min-width:0;align-items:flex-start}.choice-label{flex:0 0 auto}.choice-text{min-width:0}.qflow{display:flex;gap:4.5mm;align-items:flex-start}.qflow.right .stem,.qflow.right .stem-main{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem,.qflow.left .stem-main{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:grid;grid-template-columns:repeat(var(--img-cols,1),minmax(0,1fr));gap:var(--img-gap,8px);margin:1.0mm 0 1.2mm}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.placement-right,.placement-left{justify-content:flex-start}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:3mm;width:145mm;max-width:100%;margin:1.2mm 0 1.5mm!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.print-hd-q7{width:94%;margin:1.2mm 0 1.5mm}.print-hd-q7 img{display:block;width:100%;height:auto}.print-hd-q15{display:grid;grid-template-columns:minmax(0,1fr) 42mm;gap:4mm;align-items:start}.print-hd-q15-img img{display:block;width:42mm;height:auto}.teacher-block{margin:2mm 0 1mm;padding:2.3mm 3mm;background:#f5f7fa;border-left:1.2mm solid #7da8df;page-break-inside:avoid;break-inside:avoid}.teacher-answer{margin-bottom:1.4mm}.teacher-solution{line-height:1.42}.teacher-solution>b{display:block;margin-bottom:.5mm}.teacher-solution p{margin:0}.teacher-solution-images{display:flex;gap:2mm;flex-wrap:wrap;margin-top:1mm}.teacher-solution-images img{max-width:80mm;height:auto}mjx-container{margin-top:0!important;margin-bottom:0!important}@page{size:A4;margin:10mm 12mm 11mm}</style></head><body><main><h1>${title}</h1><div class="sub">${sub}</div><div class="version">${versionText}</div>${qs.map((q,i)=>`<div class="q"><div class="num">${i+1}.</div><div class="qcontent">${printQuestionBody(q)}${teacher?teacherAnswerHtml(q):''}</div></div>`).join('')}</main></body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+function printPaper(){return exportPaper('student')}
 
-$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
+$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#exportStudentPdf').onclick=()=>exportPaper('student');$('#exportTeacherPdf').onclick=()=>exportPaper('teacher');$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
 $('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');refreshLayoutPreview();e.target.value=''}catch(err){alert(err.message)}});
 document.querySelectorAll('[data-layout-preset]').forEach(b=>b.addEventListener('click',()=>applyLayoutPreset(b.dataset.layoutPreset)));
 ['fImagePlacement','fImageAlign','fImageWidthPct','fImageMaxMm','fImageGridCols','fImageGap','fPrintWidthPct','fPrintMaxMm','fTextWrap','fKeepWithStem'].forEach(id=>$('#'+id)?.addEventListener('input',refreshLayoutPreview));
