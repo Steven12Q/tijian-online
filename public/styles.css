@@ -97,3 +97,6 @@
 .exam-export-info span{font-size:11px;color:#7890a9}
 .exam-export-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:980px){.exam-export-bar{align-items:flex-start;flex-direction:column}.exam-export-actions{justify-content:flex-start}}
+
+/* v1.3.13 大题小问编号 */
+.subquestion-mark{display:inline-block;white-space:nowrap;margin-right:.25em}
