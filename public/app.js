@@ -1,6 +1,6 @@
 let me=null, questions=[], selectedId=null, topicFilter='', currentPage='bank', bankMode='all', editingId=null, users=[];
 let paperIds=JSON.parse(localStorage.getItem('tijian-paper')||'[]');
-let draftStemImages=[], draftSolutionImages=[];
+let draftStemImages=[], draftSolutionImages=[], draftLayout={};
 let importPayload=null;
 const $=s=>document.querySelector(s);
 async function api(url,opts={}){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts});let data={};try{data=await r.json()}catch{}if(!r.ok)throw new Error(data.error||'请求失败');return data}
@@ -39,7 +39,7 @@ function fallbackLayout(q={}){
   const m={
     'HD-1':{imagePlacement:'right',align:'top',imageMaxWidthMm:34,textWrap:true,keepWithStem:true},
     'HD-3':{imagePlacement:'right',align:'top',imageMaxWidthMm:42,textWrap:true,keepWithStem:true},
-    'HD-7':{imagePlacement:'below',align:'center',imageMaxWidthMm:154,keepWithStem:true},
+    'HD-7':{imagePlacement:'below',align:'center',imageMaxWidthMm:125,keepWithStem:true},
     'HD-15':{imagePlacement:'right',align:'top',imageMaxWidthMm:45,textWrap:true,keepWithStem:true},
     'HD-19':{imagePlacement:'right',align:'top',imageMaxWidthMm:48,textWrap:true,keepWithStem:true},
     'BJ-10':{imagePlacement:'right',align:'top',imageMaxWidthMm:46,textWrap:true,keepWithStem:true},
@@ -48,11 +48,93 @@ function fallbackLayout(q={}){
   };
   return m[key]||{};
 }
-function effectiveLayout(q={}){const fb=fallbackLayout(q);const db=(q.layout&&typeof q.layout==='object')?q.layout:{};return {...fb,...db}}
-function imageBoxStyle(layout={}){const mm=Number(layout.imageMaxWidthMm);const ratio=Number(layout.imageWidthRatio);if(Number.isFinite(mm)){const x=Math.max(20,Math.min(180,mm));return `width:${x}mm;max-width:${x}mm;flex:0 0 ${x}mm;`;}if(Number.isFinite(ratio)){const x=Math.max(10,Math.min(100,ratio*100));return `width:${x}%;max-width:${x}%;flex:0 0 ${x}%;`;}return 'max-width:100%;'}
-function imageHtml(images=[],layout={}){if(!images?.length)return '';const p=layout.imagePlacement||'below';const cls=`question-images placement-${p} align-${layout.align||'left'}`;const st=imageBoxStyle(layout);return `<div class="${cls}" style="${st}">${images.map(src=>`<img src="${escapeHtml(src)}" loading="lazy" alt="题目配图">`).join('')}</div>`}
-function questionBodyHtml(q){const layout=effectiveLayout(q);const stem=`<div class="math-content question-stem">${latexToHtml(q.stem)}</div>`;const imgs=imageHtml(q.stemImages,layout);const p=layout.imagePlacement||'below';return (p==='right'||p==='left')?`<div class="question-flow flow-${p}">${stem}${imgs}</div>`:`${stem}${imgs}`}
-function refreshImagePreview(kind){const arr=kind==='stem'?draftStemImages:draftSolutionImages;const el=$(kind==='stem'?'#stemImagePreview':'#solutionImagePreview');if(!el)return;el.innerHTML=arr.map((src,i)=>`<div class="image-chip"><img src="${escapeHtml(src)}"><button type="button" data-img-kind="${kind}" data-img-index="${i}">×</button></div>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.imgKind==='stem'?draftStemImages:draftSolutionImages;a.splice(Number(b.dataset.imgIndex),1);refreshImagePreview(b.dataset.imgKind)})}
+function effectiveLayout(q={}) {
+  const fb=fallbackLayout(q);
+  const db=(q.layout&&typeof q.layout==='object')?q.layout:{};
+  return {...fb,...db};
+}
+function imageBoxStyle(layout={},printMode=false){
+  const ratio=Number(printMode?(layout.printWidthRatio??layout.imageWidthRatio):layout.imageWidthRatio);
+  const mm=Number(printMode?(layout.printMaxWidthMm??layout.imageMaxWidthMm):layout.imageMaxWidthMm);
+  const parts=[];
+  if(Number.isFinite(ratio)){const x=Math.max(10,Math.min(100,ratio*100));parts.push(`width:${x}%`,`flex-basis:${x}%`)}
+  else if(Number.isFinite(mm)){const x=Math.max(20,Math.min(180,mm));parts.push(`width:${x}mm`,`flex-basis:${x}mm`)}
+  else parts.push('width:auto');
+  if(Number.isFinite(mm)){const x=Math.max(20,Math.min(180,mm));parts.push(`max-width:${x}mm`)}
+  else parts.push('max-width:100%');
+  return parts.join(';')+';';
+}
+function imageHtml(images=[],layout={},printMode=false){
+  if(!images?.length)return '';
+  const p=layout.imagePlacement||'below';
+  const cols=Math.max(1,Math.min(4,Number(layout.gridColumns)||1));
+  const gap=Math.max(0,Math.min(40,Number(layout.imageGapPx)||12));
+  const cls=`question-images placement-${p} align-${layout.align||'left'}${images.length>1?' multi-layout':''}`;
+  const st=imageBoxStyle(layout,printMode)+`--img-cols:${cols};--img-gap:${gap}px;`;
+  return `<div class="${cls}" style="${st}">${images.map(src=>`<img src="${escapeHtml(src)}" loading="lazy" alt="题目配图">`).join('')}</div>`;
+}
+function questionBodyHtml(q){
+  const stem=`<div class="math-content question-stem">${latexToHtml(q.stem)}</div>`;
+  const layout=effectiveLayout(q);
+  const imgs=imageHtml(q.stemImages||[],layout,false);
+  const p=layout.imagePlacement||'below';
+  return (p==='right'||p==='left')?`<div class="question-flow flow-${p}">${stem}${imgs}</div>`:`${stem}${imgs}`;
+}
+function layoutFromForm(){
+  const pct=Number($('#fImageWidthPct').value);
+  const mm=$('#fImageMaxMm').value.trim()===''?undefined:Number($('#fImageMaxMm').value);
+  const ppct=$('#fPrintWidthPct').value.trim()===''?undefined:Number($('#fPrintWidthPct').value);
+  const pmm=$('#fPrintMaxMm').value.trim()===''?undefined:Number($('#fPrintMaxMm').value);
+  return {
+    imagePlacement:$('#fImagePlacement').value,
+    align:$('#fImageAlign').value,
+    imageWidthRatio:Number.isFinite(pct)?Math.max(.1,Math.min(1,pct/100)):.7,
+    imageMaxWidthMm:Number.isFinite(mm)?mm:undefined,
+    gridColumns:Number($('#fImageGridCols').value)||1,
+    imageGapPx:Number($('#fImageGap').value)||0,
+    printWidthRatio:Number.isFinite(ppct)?Math.max(.1,Math.min(1,ppct/100)):undefined,
+    printMaxWidthMm:Number.isFinite(pmm)?pmm:undefined,
+    textWrap:$('#fTextWrap').checked,
+    keepWithStem:$('#fKeepWithStem').checked,
+    pageBreakInsideAvoid:true
+  };
+}
+function loadLayoutToForm(layout={}){
+  const l={imagePlacement:'below',align:'left',imageWidthRatio:.7,gridColumns:1,imageGapPx:12,keepWithStem:true,...layout};
+  $('#fImagePlacement').value=l.imagePlacement||'below';
+  $('#fImageAlign').value=l.align||'left';
+  $('#fImageWidthPct').value=Math.round((Number(l.imageWidthRatio)||.7)*100);
+  $('#fImageMaxMm').value=Number.isFinite(Number(l.imageMaxWidthMm))?Number(l.imageMaxWidthMm):'';
+  $('#fImageGridCols').value=String(Math.max(1,Math.min(4,Number(l.gridColumns)||1)));
+  $('#fImageGap').value=Number.isFinite(Number(l.imageGapPx))?Number(l.imageGapPx):12;
+  $('#fPrintWidthPct').value=Number.isFinite(Number(l.printWidthRatio))?Math.round(Number(l.printWidthRatio)*100):'';
+  $('#fPrintMaxMm').value=Number.isFinite(Number(l.printMaxWidthMm))?Number(l.printMaxWidthMm):'';
+  $('#fTextWrap').checked=Boolean(l.textWrap);
+  $('#fKeepWithStem').checked=l.keepWithStem!==false;
+  draftLayout={...l};
+  refreshLayoutPreview();
+}
+function refreshLayoutPreview(){
+  const el=$('#layoutLivePreview');if(!el)return;
+  const layout=layoutFromForm();
+  draftLayout=layout;
+  if(!draftStemImages.length){el.innerHTML='<span>上传题目配图后可在这里预览。</span>';return}
+  const imgs=imageHtml(draftStemImages,layout,false);
+  const sample='<div class="layout-sample-text">题干文字示例：图片会按照当前参数与题干组合显示。</div>';
+  const p=layout.imagePlacement||'below';
+  el.innerHTML=(p==='right'||p==='left')?`<div class="question-flow flow-${p}">${sample}${imgs}</div>`:`${sample}${imgs}`;
+}
+function applyLayoutPreset(name){
+  const presets={
+    'right-small':{imagePlacement:'right',align:'left',imageWidthRatio:.28,imageMaxWidthMm:52,gridColumns:1,imageGapPx:10,textWrap:true,keepWithStem:true},
+    'below-wide':{imagePlacement:'below',align:'center',imageWidthRatio:.85,imageMaxWidthMm:150,gridColumns:1,imageGapPx:10,textWrap:false,keepWithStem:true},
+    'four-grid':{imagePlacement:'below',align:'left',imageWidthRatio:.95,imageMaxWidthMm:165,gridColumns:4,imageGapPx:12,textWrap:false,keepWithStem:true},
+    'full':{imagePlacement:'below',align:'center',imageWidthRatio:1,imageMaxWidthMm:180,gridColumns:1,imageGapPx:10,textWrap:false,keepWithStem:true},
+    'reset':{imagePlacement:'below',align:'left',imageWidthRatio:.7,imageMaxWidthMm:undefined,gridColumns:1,imageGapPx:12,textWrap:false,keepWithStem:true}
+  };
+  loadLayoutToForm(presets[name]||presets.reset);
+}
+function refreshImagePreview(kind){const arr=kind==='stem'?draftStemImages:draftSolutionImages;const el=$(kind==='stem'?'#stemImagePreview':'#solutionImagePreview');if(!el)return;el.innerHTML=arr.map((src,i)=>`<div class="image-chip"><img src="${escapeHtml(src)}"><button type="button" data-img-kind="${kind}" data-img-index="${i}">×</button></div>`).join('');el.querySelectorAll('button').forEach(b=>b.onclick=()=>{const a=b.dataset.imgKind==='stem'?draftStemImages:draftSolutionImages;a.splice(Number(b.dataset.imgIndex),1);refreshImagePreview(b.dataset.imgKind);if(b.dataset.imgKind==='stem')refreshLayoutPreview()})}
 async function filesToDataUrls(fileList){const files=[...fileList];if(files.length>6)throw new Error('一次最多上传 6 张图片');const out=[];for(const f of files){if(f.size>1_800_000)throw new Error(`图片 ${f.name} 超过 1.8MB，请先压缩`);if(!/^image\//.test(f.type))throw new Error(`${f.name} 不是图片文件`);out.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f)}));}return out}
 function stripTex(s=''){return s.replace(/\\[a-zA-Z]+/g,'').replace(/[${}]/g,'').slice(0,120)}
 function escapeHtml(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -133,18 +215,33 @@ function switchPage(page){
 function togglePaper(id){paperIds=paperIds.includes(id)?paperIds.filter(x=>x!==id):[...paperIds,id];savePaper();renderDetail();if(currentPage==='paper')renderPaper()}
 function renderPaper(){const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);$('#paperCountText').textContent=`${qs.length} 道题`;$('#paperList').innerHTML=qs.length?qs.map((q,i)=>`<div class="paper-item"><div class="paper-num">${i+1}.</div><div class="paper-main"><h4>${escapeHtml(q.title)}</h4>${questionBodyHtml(q)}<div class="mini">${escapeHtml(q.type)} · ${escapeHtml(q.source)}</div></div><div class="paper-row-actions"><button class="ghost tiny" data-up="${q.id}">↑</button><button class="ghost tiny" data-down="${q.id}">↓</button><button class="danger tiny" data-remove="${q.id}">移除</button></div></div>`).join(''):'<div class="empty" style="height:220px">还没有选题。回到共享题库，点击“加入试卷”。</div>';document.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>togglePaper(b.dataset.remove));document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>movePaper(b.dataset.up,-1));document.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>movePaper(b.dataset.down,1));renderMath($('#paperList'))}
 function movePaper(id,dir){const i=paperIds.indexOf(id),j=i+dir;if(i<0||j<0||j>=paperIds.length)return;[paperIds[i],paperIds[j]]=[paperIds[j],paperIds[i]];savePaper();renderPaper()}
-function openCreate(){editingId=null;draftStemImages=[];draftSolutionImages=[];$('#modalTitle').textContent='录入新题';['fTitle','fSource','fExamNumber','fStem','fAnswer','fSolution','fTags'].forEach(id=>$('#'+id).value='');$('#fChapter').value='函数';$('#fTopic').value='函数与导数';$('#fType').value='解答题';$('#fDifficulty').value='中档';$('#fGrade').value='高三';$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');$('#deleteQuestion').classList.add('hidden');$('#modal').classList.remove('hidden')}
-function openEdit(q){editingId=q.id;draftStemImages=[...(q.stemImages||[])];draftSolutionImages=[...(q.solutionImages||[])];$('#modalTitle').textContent='编辑题目';$('#fTitle').value=q.title;$('#fChapter').value=q.chapter||q.topic;$('#fTopic').value=q.topic;$('#fType').value=q.type;$('#fDifficulty').value=q.difficulty;$('#fGrade').value=q.grade;$('#fTags').value=(q.tags||[]).join(', ');$('#fSource').value=q.source;$('#fExamNumber').value=q.examNumber||'';$('#fStem').value=q.stem;$('#fAnswer').value=q.answer;$('#fSolution').value=q.solution;$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');$('#deleteQuestion').classList.toggle('hidden',me.role!=='admin');$('#modal').classList.remove('hidden')}
-async function saveQuestion(){const b={title:$('#fTitle').value,chapter:$('#fChapter').value,topic:$('#fTopic').value,type:$('#fType').value,difficulty:$('#fDifficulty').value,grade:$('#fGrade').value,tags:$('#fTags').value,source:$('#fSource').value,examNumber:$('#fExamNumber').value,stem:$('#fStem').value,answer:$('#fAnswer').value,solution:$('#fSolution').value,stemImages:draftStemImages,solutionImages:draftSolutionImages,layout:(questions.find(x=>x.id===editingId)?.layout||{})};if(!b.title||!b.stem)return alert('请至少填写标题和题干');try{const d=await api(editingId?`/api/questions/${encodeURIComponent(editingId)}`:'/api/questions',{method:editingId?'PUT':'POST',body:JSON.stringify(b)});$('#modal').classList.add('hidden');selectedId=d.question.id;await loadQuestions()}catch(e){alert(e.message)}}
+function openCreate(){editingId=null;draftStemImages=[];draftSolutionImages=[];draftLayout={};$('#modalTitle').textContent='录入新题';['fTitle','fSource','fExamNumber','fStem','fAnswer','fSolution','fTags'].forEach(id=>$('#'+id).value='');$('#fChapter').value='函数';$('#fTopic').value='函数与导数';$('#fType').value='解答题';$('#fDifficulty').value='中档';$('#fGrade').value='高三';$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');loadLayoutToForm({});$('#deleteQuestion').classList.add('hidden');$('#modal').classList.remove('hidden')}
+function openEdit(q){editingId=q.id;draftStemImages=[...(q.stemImages||[])];draftSolutionImages=[...(q.solutionImages||[])];draftLayout={...(q.layout||{})};$('#modalTitle').textContent='编辑题目';$('#fTitle').value=q.title;$('#fChapter').value=q.chapter||q.topic;$('#fTopic').value=q.topic;$('#fType').value=q.type;$('#fDifficulty').value=q.difficulty;$('#fGrade').value=q.grade;$('#fTags').value=(q.tags||[]).join(', ');$('#fSource').value=q.source;$('#fExamNumber').value=q.examNumber||'';$('#fStem').value=q.stem;$('#fAnswer').value=q.answer;$('#fSolution').value=q.solution;$('#fStemImages').value='';$('#fSolutionImages').value='';refreshImagePreview('stem');refreshImagePreview('solution');loadLayoutToForm(effectiveLayout(q));$('#deleteQuestion').classList.toggle('hidden',me.role!=='admin');$('#modal').classList.remove('hidden')}
+async function saveQuestion(){const b={title:$('#fTitle').value,chapter:$('#fChapter').value,topic:$('#fTopic').value,type:$('#fType').value,difficulty:$('#fDifficulty').value,grade:$('#fGrade').value,tags:$('#fTags').value,source:$('#fSource').value,examNumber:$('#fExamNumber').value,stem:$('#fStem').value,answer:$('#fAnswer').value,solution:$('#fSolution').value,stemImages:draftStemImages,solutionImages:draftSolutionImages,layout:layoutFromForm()};if(!b.title||!b.stem)return alert('请至少填写标题和题干');try{const d=await api(editingId?`/api/questions/${encodeURIComponent(editingId)}`:'/api/questions',{method:editingId?'PUT':'POST',body:JSON.stringify(b)});$('#modal').classList.add('hidden');selectedId=d.question.id;await loadQuestions()}catch(e){alert(e.message)}}
 async function deleteQuestion(){if(!editingId||!confirm('确定删除这道题吗？此操作不可撤销。'))return;try{await api(`/api/questions/${encodeURIComponent(editingId)}`,{method:'DELETE'});paperIds=paperIds.filter(x=>x!==editingId);savePaper();selectedId=null;$('#modal').classList.add('hidden');await loadQuestions()}catch(e){alert(e.message)}}
 async function loadUsers(){if(me.role!=='admin')return;try{users=(await api('/api/users')).users;renderUsers()}catch(e){alert(e.message)}}
 function renderUsers(){$('#userList').innerHTML=users.map(u=>`<div class="user-row"><div class="user-info"><b>${escapeHtml(u.name)} <span class="pill">${u.role==='admin'?'管理员':'教师'}</span></b><span>用户名：${escapeHtml(u.username)} · ${u.active?'启用':'已停用'}</span></div>${u.role==='teacher'?`<button class="ghost tiny" data-active="${u.id}" data-next="${u.active?'0':'1'}">${u.active?'停用':'启用'}</button>`:''}</div>`).join('');document.querySelectorAll('[data-active]').forEach(b=>b.onclick=()=>toggleUser(b.dataset.active,b.dataset.next==='1'))}
 async function createTeacher(){const b={username:$('#newUsername').value,name:$('#newName').value,password:$('#newPassword').value};try{await api('/api/users',{method:'POST',body:JSON.stringify(b)});$('#userMsg').textContent='教师账号已创建。';$('#newUsername').value=$('#newName').value=$('#newPassword').value='';await loadUsers()}catch(e){$('#userMsg').textContent=e.message}}
 async function toggleUser(id,active){try{await api(`/api/users/${id}`,{method:'PATCH',body:JSON.stringify({active})});await loadUsers()}catch(e){alert(e.message)}}
-function printQuestionBody(q){const layout=effectiveLayout(q);const p=layout.imagePlacement||'below';const st=imageBoxStyle(layout);const imgs=q.stemImages?.length?`<div class="imgs placement-${p}" style="${st}">${q.stemImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`:'';const stem=`<div class="stem">${latexToHtml(q.stem)}</div>`;return (p==='right'||p==='left')?`<div class="qflow ${p}">${stem}${imgs}</div>`:`${stem}${imgs}`}
-function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true,macros:{vv:['\\\\overrightarrow{#1}',1],bm:['\\\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>body{font-family:'Microsoft YaHei',sans-serif;max-width:800px;margin:36px auto;color:#111;line-height:1.85}h1{text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:28px}.q{margin:14px 0;page-break-inside:avoid;break-inside:avoid}.num{font-weight:bold;margin-right:8px}.meta{font-size:12px;color:#777;margin-top:4px}.qflow{display:flex;gap:8mm;align-items:flex-start}.qflow.right .stem{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.placement-right,.placement-left{justify-content:flex-start}@page{margin:16mm}</style></head><body><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><span class="num">${i+1}.</span>${printQuestionBody(q)}</div>`).join('')}</body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+function printQuestionBody(q){
+  const stem=`<div class="stem">${latexToHtml(q.stem)}</div>`;
+  const layout=effectiveLayout(q);
+  const p=layout.imagePlacement||'below';
+  let imgs='';
+  if(q.stemImages?.length){
+    const cols=Math.max(1,Math.min(4,Number(layout.gridColumns)||1));
+    const gap=Math.max(0,Math.min(40,Number(layout.imageGapPx)||12));
+    const st=imageBoxStyle(layout,true)+`--img-cols:${cols};--img-gap:${gap}px;`;
+    imgs=`<div class="imgs question-images placement-${p} align-${layout.align||'left'}${q.stemImages.length>1?' multi-layout':''}" style="${st}">${q.stemImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`;
+  }
+  return (p==='right'||p==='left')?`<div class="qflow ${p}">${stem}${imgs}</div>`:`${stem}${imgs}`;
+}
+function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true,macros:{vv:['\\\\overrightarrow{#1}',1],bm:['\\\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>body{font-family:'Microsoft YaHei',sans-serif;max-width:800px;margin:36px auto;color:#111;line-height:1.85}h1{text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:28px}.q{margin:14px 0;page-break-inside:avoid;break-inside:avoid}.num{font-weight:bold;margin-right:8px}.meta{font-size:12px;color:#777;margin-top:4px}.qflow{display:flex;gap:8mm;align-items:flex-start}.qflow.right .stem{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:4mm;width:125mm;max-width:125mm;margin:4mm 0!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.placement-right,.placement-left{justify-content:flex-start}.print-hd-q7{width:90%;margin:3mm 0 5mm}.print-hd-q7 img{display:block;width:100%;height:auto}.print-hd-q15{display:grid;grid-template-columns:minmax(0,1fr) 46mm;gap:5mm;align-items:start}.print-hd-q15-img img{display:block;width:46mm;height:auto}@page{margin:16mm}</style></head><body><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><span class="num">${i+1}.</span>${printQuestionBody(q)}</div>`).join('')}</body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
 
 $('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
-$('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');e.target.value=''}catch(err){alert(err.message)}});
+$('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');refreshLayoutPreview();e.target.value=''}catch(err){alert(err.message)}});
+document.querySelectorAll('[data-layout-preset]').forEach(b=>b.addEventListener('click',()=>applyLayoutPreset(b.dataset.layoutPreset)));
+['fImagePlacement','fImageAlign','fImageWidthPct','fImageMaxMm','fImageGridCols','fImageGap','fPrintWidthPct','fPrintMaxMm','fTextWrap','fKeepWithStem'].forEach(id=>$('#'+id)?.addEventListener('input',refreshLayoutPreview));
+['fImagePlacement','fImageAlign','fImageGridCols','fTextWrap','fKeepWithStem'].forEach(id=>$('#'+id)?.addEventListener('change',refreshLayoutPreview));
 $('#fSolutionImages').addEventListener('change',async e=>{try{draftSolutionImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('solution');e.target.value=''}catch(err){alert(err.message)}});
 (async()=>{try{me=(await api('/api/me')).user;await showApp();await loadQuestions()}catch{}})();setInterval(()=>{if(me&&currentPage==='bank')loadQuestions()},15000);
