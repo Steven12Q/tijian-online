@@ -85,14 +85,22 @@ function cleanImages(v) {
 function cleanLayout(v) {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
   const placement = ['below','right','left'].includes(String(v.imagePlacement||'')) ? String(v.imagePlacement) : 'below';
-  const align = ['left','center','right','top','middle','bottom'].includes(String(v.align||'')) ? String(v.align) : 'left';
+  const align = ['left','center','right'].includes(String(v.align||'')) ? String(v.align) : 'left';
   const ratio = Number(v.imageWidthRatio);
   const maxMm = Number(v.imageMaxWidthMm);
+  const printRatio = Number(v.printWidthRatio);
+  const printMaxMm = Number(v.printMaxWidthMm);
+  const gridColumns = Number(v.gridColumns);
+  const imageGapPx = Number(v.imageGapPx);
   return {
     imagePlacement: placement,
     align,
     imageWidthRatio: Number.isFinite(ratio) ? Math.min(1, Math.max(0.1, ratio)) : undefined,
     imageMaxWidthMm: Number.isFinite(maxMm) ? Math.min(180, Math.max(20, maxMm)) : undefined,
+    gridColumns: Number.isFinite(gridColumns) ? Math.min(4, Math.max(1, Math.round(gridColumns))) : 1,
+    imageGapPx: Number.isFinite(imageGapPx) ? Math.min(40, Math.max(0, Math.round(imageGapPx))) : 12,
+    printWidthRatio: Number.isFinite(printRatio) ? Math.min(1, Math.max(0.1, printRatio)) : undefined,
+    printMaxWidthMm: Number.isFinite(printMaxMm) ? Math.min(180, Math.max(20, printMaxMm)) : undefined,
     textWrap: Boolean(v.textWrap),
     keepWithStem: v.keepWithStem !== false,
     pageBreakInsideAvoid: v.pageBreakInsideAvoid !== false

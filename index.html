@@ -79,6 +79,36 @@
     <label class="span2">来源试卷<input id="fSource" placeholder="如：2025-2026 海淀区高三期中 / 2026 北京高考"></label>
     <label class="span2">题干（LaTeX）<textarea id="fStem" rows="6" placeholder="可直接粘贴常见 LaTeX；支持 $...$、\(...\)、\[...\]、aligned、cases、matrix、\vv 等"></textarea></label>
     <label class="span2">题目配图<input id="fStemImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">支持 PNG/JPG/WebP/SVG，可一次选多张。单张建议不超过 1.5MB。</small><div id="stemImagePreview" class="image-preview"></div></label>
+    <div class="span2 image-layout-panel">
+      <div class="image-layout-head"><b>图片排版</b><span>这些设置只控制题目配图；修改后可实时预览。</span></div>
+      <div class="layout-presets">
+        <button type="button" class="ghost tiny" data-layout-preset="right-small">右侧小图</button>
+        <button type="button" class="ghost tiny" data-layout-preset="below-wide">下方横图</button>
+        <button type="button" class="ghost tiny" data-layout-preset="four-grid">四选项横排</button>
+        <button type="button" class="ghost tiny" data-layout-preset="full">全宽大图</button>
+        <button type="button" class="ghost tiny" data-layout-preset="reset">恢复默认</button>
+      </div>
+      <div class="layout-grid">
+        <label>位置
+          <select id="fImagePlacement"><option value="below">题干下方</option><option value="right">题干右侧</option><option value="left">题干左侧</option></select>
+        </label>
+        <label>对齐
+          <select id="fImageAlign"><option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option></select>
+        </label>
+        <label>网页宽度（%）<input id="fImageWidthPct" type="number" min="10" max="100" step="1" value="70"></label>
+        <label>最大宽度（mm，可空）<input id="fImageMaxMm" type="number" min="20" max="180" step="1" placeholder="如 55"></label>
+        <label>多图列数
+          <select id="fImageGridCols"><option value="1">1 列</option><option value="2">2 列</option><option value="3">3 列</option><option value="4">4 列</option></select>
+        </label>
+        <label>图片间距（px）<input id="fImageGap" type="number" min="0" max="40" step="1" value="12"></label>
+        <label>打印宽度（%，可空）<input id="fPrintWidthPct" type="number" min="10" max="100" step="1" placeholder="留空=网页宽度"></label>
+        <label>打印最大宽度（mm，可空）<input id="fPrintMaxMm" type="number" min="20" max="180" step="1" placeholder="留空=网页最大宽度"></label>
+        <label class="check-label"><input id="fTextWrap" type="checkbox">文字环绕图片</label>
+        <label class="check-label"><input id="fKeepWithStem" type="checkbox" checked>题干与图片尽量同页</label>
+      </div>
+      <div class="layout-live-title">实时预览</div>
+      <div id="layoutLivePreview" class="layout-live-preview"><span>上传题目配图后可在这里预览。</span></div>
+    </div>
     <label class="span2">答案<textarea id="fAnswer" rows="2"></textarea></label>
     <label class="span2">解析（LaTeX）<textarea id="fSolution" rows="6"></textarea></label>
     <label class="span2">解析配图<input id="fSolutionImages" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple><small class="field-tip">几何图、函数图、统计图、TikZ 编译后的图片都可以上传。</small><div id="solutionImagePreview" class="image-preview"></div></label>
