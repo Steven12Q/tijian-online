@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "format": "tijian-import-v1",
+    "exam": "2025-2026 海淀区高三期中",
+    "questionCount": 5
+  },
+  "questions": [
+    {
+      "id": "HD-2025MID-001",
+      "examNumber": "1",
+      "title": "集合与 Venn 图",
+      "type": "单选题",
+      "grade": "高三",
+      "difficulty": "基础",
+      "chapter": "集合与常用逻辑用语",
+      "topic": "集合与逻辑",
+      "source": "2025-2026 海淀高三期中",
+      "tags": [
+        "集合",
+        "Venn图"
+      ],
+      "stem": "设全集 $U=\\mathbb R$，$A=\\{-2,-1,1\\}$，$B=\\{x\\mid x^2-x\\le 0\\}$，则图中阴影部分表示的集合为（　）",
+      "answer": "A",
+      "solution": "由 $x^2-x\\le0$ 得 $0\\le x\\le1$，故 $B=[0,1]$。阴影表示 $A\\setminus B=\\{-2,-1\\}$。"
+    },
+    {
+      "id": "HD-2025MID-002",
+      "examNumber": "2",
+      "title": "复数的模",
+      "type": "单选题",
+      "grade": "高三",
+      "difficulty": "基础",
+      "chapter": "复数",
+      "topic": "复数",
+      "source": "2025-2026 海淀高三期中",
+      "tags": [
+        "复数",
+        "共轭复数"
+      ],
+      "stem": "在复平面内，复数 $z$ 对应的点的坐标是 $(1,\\sqrt3)$，则 $z\\overline z=$（　）",
+      "answer": "D",
+      "solution": "$z=1+\\sqrt3 i$，故 $z\\overline z=|z|^2=4$。"
+    },
+    {
+      "id": "HD-2025MID-003",
+      "examNumber": "3",
+      "title": "平面向量的加法与模",
+      "type": "单选题",
+      "grade": "高三",
+      "difficulty": "基础",
+      "chapter": "平面向量",
+      "topic": "平面向量",
+      "source": "2025-2026 海淀高三期中",
+      "tags": [
+        "平面向量",
+        "向量模"
+      ],
+      "stem": "已知向量 $\\overrightarrow{AB},\\overrightarrow{CD}$ 在正方形网格上的位置如图所示。若小正方形边长为 $1$，求 $|\\overrightarrow{AB}+\\overrightarrow{CD}|$。",
+      "answer": "5",
+      "solution": "由网格读出两向量坐标，相加后得到 $(3,4)$，故模为 $5$。"
+    },
+    {
+      "id": "HD-2025MID-015",
+      "examNumber": "15",
+      "title": "扇形草坪上的运动",
+      "type": "填空题",
+      "grade": "高三",
+      "difficulty": "较难",
+      "chapter": "函数与导数",
+      "topic": "函数与导数",
+      "source": "2025-2026 海淀高三期中",
+      "tags": [
+        "导数",
+        "三角函数",
+        "函数零点"
+      ],
+      "stem": "扇形半径 $OA=60$ 米，$\\angle AOB=\\frac{2\\pi}{3}$。甲沿 $OA$ 运动，乙沿弧 $AB$ 运动，记两人距离为 $f(t)$，判断给出的四个结论。",
+      "answer": "①②④",
+      "solution": "令 $g(t)=f^2(t)=t^2+3600-120t\\cos\\frac{\\pi t}{90}$。通过 $g'(t)$ 的符号判断单调性，并用具体点函数值配合零点存在性定理确定最小值点。"
+    },
+    {
+      "id": "HD-2025MID-021",
+      "examNumber": "21",
+      "title": "满足性质 P 的 0-1 数表",
+      "type": "解答题",
+      "grade": "高三",
+      "difficulty": "压轴",
+      "chapter": "计数原理",
+      "topic": "计数原理",
+      "source": "2025-2026 海淀高三期中",
+      "tags": [
+        "组合数学",
+        "构造法",
+        "极值"
+      ],
+      "stem": "给定 $n\\ge3$，$A=(a_{ij})$ 为 $n\\times n$ 的 0-1 数表，并满足若干条件，研究性质 $P$ 及列和集合 $M$。",
+      "answer": "(1) 不具有；(2) $n_{\\min}=5$；(3) 分情况取 $3,7,2n-4$。",
+      "solution": "记第 $j$ 列和为 $s_j$。有 $2\\le s_j\\le n-1$ 且 $\\sum s_j=\\frac{n(n-1)}2$。结合上界估计和递推构造得到结论。"
+    }
+  ]
+}
