@@ -20,7 +20,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="paper-images.js?v=1.3.13"></script>
+  <script defer src="app.js?v=1.3.13"></script>
 </head>
 <body>
 <div id="login" class="login-screen">
@@ -41,12 +42,12 @@
     <div class="brand"><div class="brand-mark sm">∑</div><div><div class="brand-name">题笺 <span>ONLINE</span></div><div class="brand-sub">高中数学共享题库</div></div></div>
     <nav>
       <button id="navBank" class="nav active">▣　共享题库 <span id="countBadge">0</span></button>
-      <button id="navChapters" class="nav">▦　按章/节</button>
+      <button id="navChapters" class="nav">▦　按章节</button>
       <button id="navExams" class="nav">▧　按试卷</button>
       <button id="navPaper" class="nav">▤　选题组卷 <span id="paperBadge">0</span></button>
       <button id="navUsers" class="nav hidden">♙　教师账号</button>
     </nav>
-    <div id="topicArea"><div id="classifyTitle" class="side-title">知识板块</div><div id="classifySearchWrap" class="side-search hidden"><input id="classifySearch" placeholder="搜索试卷"></div><div id="topics" class="topics"></div></div>
+    <div id="topicArea"><div id="classifyTitle" class="side-title">知识板块</div><div id="topics" class="topics"></div></div>
     <div class="side-footer"><div class="cloud-dot"></div><span>云端数据库已连接</span></div>
   </aside>
   <main>
@@ -62,7 +63,7 @@
     </section>
 
     <section id="paperPage" class="page-section hidden scroll-page">
-      <div class="paper-layout"><div class="paper-panel"><h3>试卷设置</h3><label>试卷标题<input id="paperTitle" value="高中数学练习"></label><label>副标题<input id="paperSubtitle" placeholder="如：函数与导数"></label><div class="paper-actions"><button id="clearPaper" class="ghost">清空选题</button><button id="exportStudentPdf" class="primary">导出学生版 PDF</button><button id="exportTeacherPdf" class="primary">导出教师版 PDF</button></div></div><div class="paper-panel grow"><div class="panel-title"><h3>已选题目</h3><span id="paperCountText">0 道题</span></div><div id="paperList"></div></div></div>
+      <div class="paper-layout"><div class="paper-panel"><h3>试卷设置</h3><label>试卷标题<input id="paperTitle" value="高中数学练习"></label><label>副标题<input id="paperSubtitle" placeholder="如：函数与导数专题"></label><div class="paper-actions"><button id="clearPaper" class="ghost">清空选题</button><button id="exportStudentPdf" class="primary">导出学生版 PDF</button><button id="exportTeacherPdf" class="primary">导出教师版 PDF</button></div></div><div class="paper-panel grow"><div class="panel-title"><h3>已选题目</h3><span id="paperCountText">0 道题</span></div><div id="paperList"></div></div></div>
     </section>
 
     <section id="usersPage" class="page-section hidden scroll-page">
@@ -73,10 +74,9 @@
 
 <div id="modal" class="modal hidden">
   <div class="modal-card"><div class="modal-head"><h3 id="modalTitle">录入新题</h3><button id="closeModal">×</button></div><div class="form-grid">
-    <label>标题<input id="fTitle"></label><label>章<select id="fChapter"></select></label>
-    <label>节<select id="fSection"></select></label><label>知识点/标签<input id="fTopic" value="函数"></label>
-    <label>原试卷题号<input id="fExamNumber" placeholder="如 15 或 21(2)"></label><label>题型<select id="fType"><option>单选题</option><option>填空题</option><option selected>解答题</option></select></label>
-    <label>难度<select id="fDifficulty"><option>基础</option><option selected>中档</option><option>较难</option><option>压轴</option></select></label>
+    <label>标题<input id="fTitle"></label><label>章节分类<input id="fChapter" value="函数"></label>
+    <label>知识板块<input id="fTopic" value="函数与导数"></label><label>原试卷题号<input id="fExamNumber" placeholder="如 15 或 21(2)"></label>
+    <label>题型<select id="fType"><option>单选题</option><option>填空题</option><option selected>解答题</option></select></label><label>难度<select id="fDifficulty"><option>基础</option><option selected>中档</option><option>较难</option><option>压轴</option></select></label>
     <label>年级<select id="fGrade"><option>高一</option><option>高二</option><option selected>高三</option></select></label><label>标签<input id="fTags" placeholder="导数, 零点, 参数"></label>
     <label class="span2">来源试卷<input id="fSource" placeholder="如：2025-2026 海淀区高三期中 / 2026 北京高考"></label>
     <label class="span2">题干（LaTeX）<textarea id="fStem" rows="6" placeholder="可直接粘贴常见 LaTeX；支持 $...$、\(...\)、\[...\]、aligned、cases、matrix、\vv 等"></textarea></label>
@@ -120,7 +120,7 @@
 <div id="importModal" class="modal hidden">
   <div class="modal-card import-card">
     <div class="modal-head"><h3>批量导入试卷</h3><button id="closeImportModal">×</button></div>
-    <div class="import-help">上传题笺导入文件（JSON）。一套试卷可一次导入几十道题；章、节、知识点、来源试卷、原题号、答案、解析和配图都会一并保存；旧导入文件会按题目与解析自动归类到新的章、节。</div>
+    <div class="import-help">上传题笺导入文件（JSON）。一套试卷可一次导入几十道题；章节、来源试卷、原题号、答案、解析和配图都会一并保存。</div>
     <label class="import-file">选择导入文件<input id="importFile" type="file" accept="application/json,.json,.tijian"></label>
     <div id="importPreview" class="import-preview">尚未选择文件</div>
     <label>遇到相同题目 ID

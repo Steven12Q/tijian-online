@@ -97,4 +97,3 @@
 .exam-export-info span{font-size:11px;color:#7890a9}
 .exam-export-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:980px){.exam-export-bar{align-items:flex-start;flex-direction:column}.exam-export-actions{justify-content:flex-start}}
-.side-search{padding:0 8px 8px}.side-search input{width:100%;border:1px solid #365473;background:#203a5f;color:#fff;border-radius:6px;padding:8px 9px;outline:none;font-size:12px}.side-search input::placeholder{color:#8fa6c1}.chapter-group{margin-bottom:2px}.chapter-topic b{font-weight:600}.section-list{padding-left:8px}.section-topic{font-size:12px;padding-left:18px;color:#b9c8da}.section-topic span{font-size:11px}.topics{max-height:calc(100vh - 330px);overflow:auto;padding-right:2px}.topics::-webkit-scrollbar{width:5px}.topics::-webkit-scrollbar-thumb{background:#365473;border-radius:4px}

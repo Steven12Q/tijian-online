@@ -106,107 +106,17 @@ function cleanLayout(v) {
     pageBreakInsideAvoid: v.pageBreakInsideAvoid !== false
   };
 }
-
-const TAXONOMY = [
-  ['第一章 集合与常用逻辑用语',['第1节 集合','第2节 常用逻辑用语']],
-  ['第二章 不等式',['第1节 等式与不等式的性质','第2节 基本不等式及其应用','第3节 二次函数与一元二次方程、不等式']],
-  ['第三章 函数',['第1节 函数的概念','第2节 函数的单调性与最值','第3节 函数的奇偶性、周期性、对称性','第4节 二次函数与幂函数','第5节 指数与指数函数','第6节 对数与对数函数','第7节 函数的图象','第8节 函数的零点与方程的解','第9节 函数模型及其应用']],
-  ['第四章 导数及其应用',['第1节 变化率与导数、导数的运算','第2节 导数与函数的单调性','第3节 导数与函数的极值、最值']],
-  ['第五章 三角函数与解三角形',['第1节 任意角与弧度制、三角函数的概念','第2节 同角三角函数的基本关系及诱导公式','第3节 三角恒等变换','第4节 三角函数的图象与性质','第5节 函数 y=A sin(ωx+φ)','第6节 解三角形']],
-  ['第六章 平面向量与复数',['第1节 平面向量的概念及线性运算','第2节 平面向量基本定理及坐标表示','第3节 平面向量的数量积及其应用','第4节 复数']],
-  ['第七章 数列',['第1节 数列的概念及简单表示','第2节 等差数列','第3节 等比数列','第4节 数列求和']],
-  ['第八章 立体几何与空间向量',['第1节 空间几何体的结构特征、表面积和体积','第2节 空间点、线、面的位置关系','第3节 直线、平面平行的判定与性质','第4节 直线、平面垂直的判定与性质','第5节 空间向量及其运算','第6节 空间角与空间距离']],
-  ['第九章 平面解析几何',['第1节 直线的方程','第2节 圆的方程','第3节 直线与圆、圆与圆的位置关系','第4节 椭圆及其性质','第5节 双曲线及其性质','第6节 抛物线及其性质']],
-  ['第十章 计数原理',['第1节 计数原理、排列与组合','第2节 二项式定理']],
-  ['第十一章 概率与统计',['第1节 随机事件与古典概型','第2节 条件概率、全概率公式、n重伯努利试验与二项分布','第3节 离散型随机变量及其分布列、超几何分布','第4节 离散型随机变量的均值与方差','第5节 随机抽样','第6节 用样本估计总体']]
-];
-const TAXONOMY_SECTIONS = new Map(TAXONOMY.flatMap(([c,ss])=>ss.map(x=>[x,c])));
-function inferTaxonomy(raw={}) {
-  const givenChapter=String(raw.chapter||'').trim();
-  const givenSection=String(raw.section||'').trim();
-  if (TAXONOMY_SECTIONS.has(givenSection)) return {chapter:TAXONOMY_SECTIONS.get(givenSection),section:givenSection};
-  if (TAXONOMY.some(([c])=>c===givenChapter) && givenSection) return {chapter:givenChapter,section:givenSection};
-  const text=[raw.title,raw.topic,raw.chapter,raw.stem,raw.solution,...(Array.isArray(raw.tags)?raw.tags:[])].filter(Boolean).join(' ');
-  const has=(re)=>re.test(text);
-  let chapter='',section='';
-  const pick=(c,s)=>({chapter:c,section:s});
-  // Highly specific sections first.
-  if(has(/复数|共轭复数|虚数|复平面/)) return pick('第六章 平面向量与复数','第4节 复数');
-  if(has(/二项式定理|二项展开|组合数.*展开|\(a\+b\)\^n/)) return pick('第十章 计数原理','第2节 二项式定理');
-  if(has(/排列|组合|计数原理|乘法原理|加法原理|0-1数表|组合数学/)) return pick('第十章 计数原理','第1节 计数原理、排列与组合');
-  if(has(/椭圆/)) return pick('第九章 平面解析几何','第4节 椭圆及其性质');
-  if(has(/双曲线/)) return pick('第九章 平面解析几何','第5节 双曲线及其性质');
-  if(has(/抛物线/)) return pick('第九章 平面解析几何','第6节 抛物线及其性质');
-  if(has(/圆.*位置关系|直线.*圆|圆与圆|相切|圆心距/)) return pick('第九章 平面解析几何','第3节 直线与圆、圆与圆的位置关系');
-  if(has(/圆的方程|圆心|半径|圆.*标准方程/)) return pick('第九章 平面解析几何','第2节 圆的方程');
-  if(has(/直线的方程|斜率|截距|两点式|点斜式|一般式/)) return pick('第九章 平面解析几何','第1节 直线的方程');
-  if(has(/空间向量/)) return pick('第八章 立体几何与空间向量','第5节 空间向量及其运算');
-  if(has(/二面角|线面角|异面直线.*角|空间距离|点到平面.*距离/)) return pick('第八章 立体几何与空间向量','第6节 空间角与空间距离');
-  if(has(/线面垂直|面面垂直|垂直.*判定|垂直.*性质/)) return pick('第八章 立体几何与空间向量','第4节 直线、平面垂直的判定与性质');
-  if(has(/线面平行|面面平行|平行.*判定|平行.*性质/)) return pick('第八章 立体几何与空间向量','第3节 直线、平面平行的判定与性质');
-  if(has(/点线面|异面直线|空间.*位置关系/)) return pick('第八章 立体几何与空间向量','第2节 空间点、线、面的位置关系');
-  if(has(/棱柱|棱锥|圆柱|圆锥|球|表面积|体积|空间几何体/)) return pick('第八章 立体几何与空间向量','第1节 空间几何体的结构特征、表面积和体积');
-  if(has(/等差数列/)) return pick('第七章 数列','第2节 等差数列');
-  if(has(/等比数列/)) return pick('第七章 数列','第3节 等比数列');
-  if(has(/数列求和|前n项和|前 n 项和|错位相减|裂项|求和/)) return pick('第七章 数列','第4节 数列求和');
-  if(has(/数列|递推|通项公式/)) return pick('第七章 数列','第1节 数列的概念及简单表示');
-  if(has(/解三角形|正弦定理|余弦定理|三角形.*面积/)) return pick('第五章 三角函数与解三角形','第6节 解三角形');
-  if(has(/A\s*\\?sin|Asin|ω|omega|相位|振幅|周期变换/)) return pick('第五章 三角函数与解三角形','第5节 函数 y=A sin(ωx+φ)');
-  if(has(/诱导公式|同角三角函数|平方关系|商数关系/)) return pick('第五章 三角函数与解三角形','第2节 同角三角函数的基本关系及诱导公式');
-  if(has(/和差角|二倍角|倍角|辅助角|三角恒等变换|降幂/)) return pick('第五章 三角函数与解三角形','第3节 三角恒等变换');
-  if(has(/三角函数.*图象|三角函数.*单调|三角函数.*最值|正弦函数|余弦函数|正切函数/)) return pick('第五章 三角函数与解三角形','第4节 三角函数的图象与性质');
-  if(has(/任意角|弧度制|终边|三角函数的定义/)) return pick('第五章 三角函数与解三角形','第1节 任意角与弧度制、三角函数的概念');
-  if(has(/导数.*极值|导数.*最值|极大值|极小值/)) return pick('第四章 导数及其应用','第3节 导数与函数的极值、最值');
-  if(has(/导数.*单调|单调.*导数|f'\s*\(/)) return pick('第四章 导数及其应用','第2节 导数与函数的单调性');
-  if(has(/导数|变化率|切线.*斜率|求导/)) return pick('第四章 导数及其应用','第1节 变化率与导数、导数的运算');
-  if(has(/函数.*零点|零点存在性|方程的解|根的分布/)) return pick('第三章 函数','第8节 函数的零点与方程的解');
-  if(has(/指数函数|指数运算/)) return pick('第三章 函数','第5节 指数与指数函数');
-  if(has(/对数函数|对数运算|log/)) return pick('第三章 函数','第6节 对数与对数函数');
-  if(has(/幂函数|二次函数/)) return pick('第三章 函数','第4节 二次函数与幂函数');
-  if(has(/奇偶性|奇函数|偶函数|周期性|对称性|对称轴|对称中心/)) return pick('第三章 函数','第3节 函数的奇偶性、周期性、对称性');
-  if(has(/函数.*单调|单调性|函数.*最值/)) return pick('第三章 函数','第2节 函数的单调性与最值');
-  if(has(/函数图象|图象变换|图像变换/)) return pick('第三章 函数','第7节 函数的图象');
-  if(has(/函数模型|实际应用|增长率|拟合/)) return pick('第三章 函数','第9节 函数模型及其应用');
-  if(has(/定义域|值域|函数的概念|映射/)) return pick('第三章 函数','第1节 函数的概念');
-  if(has(/基本不等式|均值不等式|均值定理/)) return pick('第二章 不等式','第2节 基本不等式及其应用');
-  if(has(/一元二次不等式|二次方程|判别式/)) return pick('第二章 不等式','第3节 二次函数与一元二次方程、不等式');
-  if(has(/不等式|等式.*性质/)) return pick('第二章 不等式','第1节 等式与不等式的性质');
-  if(has(/充分条件|必要条件|命题|全称量词|存在量词|逻辑用语/)) return pick('第一章 集合与常用逻辑用语','第2节 常用逻辑用语');
-  if(has(/集合|交集|并集|补集|子集|Venn|venn/)) return pick('第一章 集合与常用逻辑用语','第1节 集合');
-  if(has(/数量积|向量.*夹角|向量.*垂直/)) return pick('第六章 平面向量与复数','第3节 平面向量的数量积及其应用');
-  if(has(/向量.*坐标|基底|基本定理/)) return pick('第六章 平面向量与复数','第2节 平面向量基本定理及坐标表示');
-  if(has(/平面向量|向量|共线向量/)) return pick('第六章 平面向量与复数','第1节 平面向量的概念及线性运算');
-  if(has(/条件概率|全概率|伯努利|二项分布/)) return pick('第十一章 概率与统计','第2节 条件概率、全概率公式、n重伯努利试验与二项分布');
-  if(has(/随机变量.*均值|随机变量.*方差|期望/)) return pick('第十一章 概率与统计','第4节 离散型随机变量的均值与方差');
-  if(has(/分布列|超几何分布|离散型随机变量/)) return pick('第十一章 概率与统计','第3节 离散型随机变量及其分布列、超几何分布');
-  if(has(/抽样|分层抽样|简单随机抽样/)) return pick('第十一章 概率与统计','第5节 随机抽样');
-  if(has(/平均数|中位数|方差|标准差|频率分布|样本.*总体|统计图|百分位数/)) return pick('第十一章 概率与统计','第6节 用样本估计总体');
-  if(has(/概率|随机事件|古典概型|互斥|独立事件/)) return pick('第十一章 概率与统计','第1节 随机事件与古典概型');
-  // Broad old labels as a conservative fallback.
-  const broad=givenChapter+String(raw.topic||'');
-  if(/三角/.test(broad)) return pick('第五章 三角函数与解三角形','第4节 三角函数的图象与性质');
-  if(/向量|复数/.test(broad)) return pick('第六章 平面向量与复数',/复数/.test(broad)?'第4节 复数':'第1节 平面向量的概念及线性运算');
-  if(/数列/.test(broad)) return pick('第七章 数列','第1节 数列的概念及简单表示');
-  if(/立体|空间/.test(broad)) return pick('第八章 立体几何与空间向量','第2节 空间点、线、面的位置关系');
-  if(/解析几何|圆锥曲线/.test(broad)) return pick('第九章 平面解析几何','第1节 直线的方程');
-  if(/概率|统计/.test(broad)) return pick('第十一章 概率与统计','第1节 随机事件与古典概型');
-  if(/函数|导数/.test(broad)) return pick('第三章 函数','第1节 函数的概念');
-  return {chapter:'其他',section:'其他'};
-}
-
 function cleanQuestionBody(b) {
   const tags = Array.isArray(b.tags)
     ? b.tags.map(x => String(x).trim()).filter(Boolean).slice(0, 20)
     : String(b.tags || '').split(/[,，、]/).map(x => x.trim()).filter(Boolean).slice(0, 20);
-  const tax = inferTaxonomy({...b,tags});
   return {
     title: String(b.title || '').trim().slice(0, 200),
     type: String(b.type || '解答题').trim().slice(0, 50),
     grade: String(b.grade || '高三').trim().slice(0, 50),
     difficulty: String(b.difficulty || '中档').trim().slice(0, 50),
     topic: String(b.topic || '其他').trim().slice(0, 100),
-    chapter: String(tax.chapter || '其他').trim().slice(0, 120),
-    section: String(tax.section || '其他').trim().slice(0, 160),
+    chapter: String(b.chapter || b.topic || '其他').trim().slice(0, 120),
     source: String(b.source || '手工录入').trim().slice(0, 300),
     examNumber: String(b.examNumber || '').trim().slice(0, 40),
     tags,
@@ -221,7 +131,7 @@ function cleanQuestionBody(b) {
 function questionFromRow(r) {
   return {
     id: r.id, title: r.title, type: r.type, grade: r.grade,
-    difficulty: r.difficulty, topic: r.topic, chapter: r.chapter || r.topic, section: r.section || r.topic || '其他', source: r.source, examNumber: r.exam_number || '',
+    difficulty: r.difficulty, topic: r.topic, chapter: r.chapter || r.topic, source: r.source, examNumber: r.exam_number || '',
     tags: r.tags || [], stem: r.stem, answer: r.answer, solution: r.solution,
     stemImages: r.stem_images || [], solutionImages: r.solution_images || [], layout: r.layout || {},
     createdBy: r.created_by_name || '未知', updatedBy: r.updated_by_name || '未知',
@@ -255,7 +165,6 @@ async function initDb() {
       difficulty TEXT NOT NULL,
       topic TEXT NOT NULL,
       chapter TEXT NOT NULL DEFAULT '其他',
-      section TEXT NOT NULL DEFAULT '其他',
       source TEXT NOT NULL,
       exam_number TEXT NOT NULL DEFAULT '',
       tags JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -274,7 +183,6 @@ async function initDb() {
   // Upgrade existing databases first, then create indexes that depend on new columns.
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS stem_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS chapter TEXT NOT NULL DEFAULT '其他'`);
-  await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS section TEXT NOT NULL DEFAULT '其他'`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS exam_number TEXT NOT NULL DEFAULT ''`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS solution_images JSONB NOT NULL DEFAULT '[]'::jsonb`);
   await pool.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS layout JSONB NOT NULL DEFAULT '{}'::jsonb`);
@@ -282,17 +190,7 @@ async function initDb() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_updated_at ON questions(updated_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_section ON questions(section)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source)`);
-
-  // v1.4: classify existing questions into the new fixed 章 → 节 taxonomy using title/topic/stem/solution/tags.
-  const existingTax = await pool.query(`SELECT id,title,topic,chapter,section,stem,solution,tags FROM questions`);
-  for (const row of existingTax.rows) {
-    const t = inferTaxonomy(row);
-    if (t.chapter !== row.chapter || t.section !== row.section) {
-      await pool.query(`UPDATE questions SET chapter=$2, section=$3 WHERE id=$1`, [row.id,t.chapter,t.section]);
-    }
-  }
 
   await pool.query(`DELETE FROM sessions WHERE expires_at <= NOW()`);
 
@@ -397,9 +295,9 @@ const server = http.createServer(async (req, res) => {
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
       const id = `Q-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,section,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb,$18,$18) RETURNING *`,
-        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.section,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
+      const { rows } = await pool.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$17) RETURNING *`,
+        [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
       const row = rows[0]; row.created_by_name=u.name; row.updated_by_name=u.name;
       return json(res, 201, { question: questionFromRow(row) });
     }
@@ -424,13 +322,13 @@ const server = http.createServer(async (req, res) => {
             const exists = await client.query('SELECT id FROM questions WHERE id=$1', [id]);
             if (exists.rows[0]) {
               if (onDuplicate === 'skip') { summary.skipped++; continue; }
-              await client.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,section=$8,source=$9,exam_number=$10,tags=$11::jsonb,stem=$12,answer=$13,solution=$14,stem_images=$15::jsonb,solution_images=$16::jsonb,layout=$17::jsonb,updated_by=$18,updated_at=NOW() WHERE id=$1`,
-                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.section,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
+              await client.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,layout=$16::jsonb,updated_by=$17,updated_at=NOW() WHERE id=$1`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
               summary.replaced++;
             } else {
-              await client.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,section,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
-                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15::jsonb,$16::jsonb,$17::jsonb,$18,$18)`,
-                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.section,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
+              await client.query(`INSERT INTO questions(id,title,type,grade,difficulty,topic,chapter,source,exam_number,tags,stem,answer,solution,stem_images,solution_images,layout,created_by,updated_by)
+                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb,$15::jsonb,$16::jsonb,$17,$17)`,
+                [id,q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
               summary.imported++;
             }
           } catch (e) {
@@ -450,8 +348,8 @@ const server = http.createServer(async (req, res) => {
       const u = await requireUser(req, res); if (!u) return;
       const q = cleanQuestionBody(await readBody(req));
       if (!q.title || !q.stem) return json(res, 400, { error: '请至少填写标题和题干' });
-      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,section=$8,source=$9,exam_number=$10,tags=$11::jsonb,stem=$12,answer=$13,solution=$14,stem_images=$15::jsonb,solution_images=$16::jsonb,layout=$17::jsonb,updated_by=$18,updated_at=NOW() WHERE id=$1 RETURNING *`,
-        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.section,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
+      const { rows } = await pool.query(`UPDATE questions SET title=$2,type=$3,grade=$4,difficulty=$5,topic=$6,chapter=$7,source=$8,exam_number=$9,tags=$10::jsonb,stem=$11,answer=$12,solution=$13,stem_images=$14::jsonb,solution_images=$15::jsonb,layout=$16::jsonb,updated_by=$17,updated_at=NOW() WHERE id=$1 RETURNING *`,
+        [decodeURIComponent(qm[1]),q.title,q.type,q.grade,q.difficulty,q.topic,q.chapter,q.source,q.examNumber,JSON.stringify(q.tags),q.stem,q.answer,q.solution,JSON.stringify(q.stemImages),JSON.stringify(q.solutionImages),JSON.stringify(q.layout||{}),u.id]);
       if (!rows[0]) return json(res, 404, { error: '题目不存在' });
       const row=rows[0];
       const names = await pool.query('SELECT name FROM users WHERE id=$1',[row.created_by]);
