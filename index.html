@@ -20,7 +20,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-  <script defer src="app.js"></script>
+  <script defer src="paper-images.js?v=1.3.14"></script>
+  <script defer src="app.js?v=1.3.14"></script>
 </head>
 <body>
 <div id="login" class="login-screen">
@@ -57,11 +58,12 @@
 
     <section id="bankPage" class="page-section">
       <div class="toolbar"><div class="search-wrap">⌕<input id="search" placeholder="搜索题目、公式、标签或来源"></div><select id="typeFilter"><option value="">全部题型</option><option>单选题</option><option>填空题</option><option>解答题</option></select><select id="difficultyFilter"><option value="">全部难度</option><option>基础</option><option>中档</option><option>较难</option><option>压轴</option></select></div>
+      <div id="examExportBar" class="exam-export-bar hidden"></div>
       <div class="workspace"><section class="list-pane"><div class="list-head"><span id="foundText">找到 0 道题</span><span>最新更新</span></div><div id="questionList" class="question-list"></div></section><section id="detail" class="detail-pane"><div class="empty">选择左侧题目查看详情</div></section></div>
     </section>
 
     <section id="paperPage" class="page-section hidden scroll-page">
-      <div class="paper-layout"><div class="paper-panel"><h3>试卷设置</h3><label>试卷标题<input id="paperTitle" value="高中数学练习"></label><label>副标题<input id="paperSubtitle" placeholder="如：函数与导数专题"></label><div class="paper-actions"><button id="clearPaper" class="ghost">清空选题</button><button id="printPaper" class="primary">打印 / 保存 PDF</button></div></div><div class="paper-panel grow"><div class="panel-title"><h3>已选题目</h3><span id="paperCountText">0 道题</span></div><div id="paperList"></div></div></div>
+      <div class="paper-layout"><div class="paper-panel"><h3>试卷设置</h3><label>试卷标题<input id="paperTitle" value="高中数学练习"></label><label>副标题<input id="paperSubtitle" placeholder="如：函数与导数专题"></label><div class="paper-actions"><button id="clearPaper" class="ghost">清空选题</button><button id="exportStudentPdf" class="primary">导出学生版 PDF</button><button id="exportTeacherPdf" class="primary">导出教师版 PDF</button></div></div><div class="paper-panel grow"><div class="panel-title"><h3>已选题目</h3><span id="paperCountText">0 道题</span></div><div id="paperList"></div></div></div>
     </section>
 
     <section id="usersPage" class="page-section hidden scroll-page">

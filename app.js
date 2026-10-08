@@ -19,6 +19,18 @@ function latexToHtml(input=''){
   let out='', i=0, buf='';
   const flush=()=>{ if(!buf)return; let t=escapeHtml(buf); t=t.replace(/\\\\/g,'<br>').replace(/\n/g,'<br>'); out+=t; buf=''; };
   while(i<s.length){
+    // Render LaTeX-style fill-in rules even when they are outside $...$.
+    // Example: \rule{3cm}{0.4pt}
+    if(s.startsWith('\\rule{',i)){
+      const m=s.slice(i).match(/^\\rule\{([0-9.]+)(cm|mm|em|px)\}\{([0-9.]+)(pt|mm|px)\}/);
+      if(m){
+        flush();
+        const width=`${m[1]}${m[2]}`;
+        out+=`<span class="fill-blank" style="width:${width}"></span>`;
+        i+=m[0].length;
+        continue;
+      }
+    }
     let start=null,end=null,open='',close='';
     if(s.startsWith('$$',i)){start=i;open='$$';close='$$';end=s.indexOf('$$',i+2);}
     else if(s.startsWith('\\[',i)){start=i;open='\\[';close='\\]';end=s.indexOf('\\]',i+2);}
@@ -178,6 +190,33 @@ async function login(){try{const d=await api('/api/login',{method:'POST',body:JS
 async function showApp(){if(!me){try{me=(await api('/api/me')).user}catch{return}}$('#login').classList.add('hidden');$('#app').classList.remove('hidden');$('#userName').textContent=`${me.name} · ${me.role==='admin'?'管理员':'教师'}`;if(me.role==='admin')$('#navUsers').classList.remove('hidden');renderPaperBadge()}
 async function loadQuestions(){try{questions=(await api('/api/questions')).questions;paperIds=paperIds.filter(id=>questions.some(q=>q.id===id));savePaper();renderAll()}catch(e){if(e.message==='未登录')location.reload()}}
 function naturalExamNo(v=''){const m=String(v).match(/\d+/);return m?Number(m[0]):9999}
+function examQuestions(source){
+  return questions.filter(q=>q.source===source).sort((x,y)=>naturalExamNo(x.examNumber)-naturalExamNo(y.examNumber)||String(x.examNumber||'').localeCompare(String(y.examNumber||''),'zh-CN'));
+}
+function addWholeExamToPaper(source){
+  const qs=examQuestions(source);
+  if(!qs.length)return alert('这套试卷暂时没有题目');
+  const existing=new Set(paperIds);
+  qs.forEach(q=>existing.add(q.id));
+  paperIds=Array.from(existing);
+  savePaper();
+  alert(`已将《${source}》的 ${qs.length} 道题加入组卷。`);
+}
+function renderExamExportBar(){
+  const bar=$('#examExportBar');
+  if(!bar)return;
+  if(bankMode!=='exam'||!topicFilter){
+    bar.classList.add('hidden');
+    bar.innerHTML='';
+    return;
+  }
+  const qs=examQuestions(topicFilter);
+  bar.classList.remove('hidden');
+  bar.innerHTML=`<div class="exam-export-info"><b>${escapeHtml(topicFilter)}</b><span>${qs.length} 道题 · 按原题号自动排序</span></div><div class="exam-export-actions"><button id="addWholeExam" class="ghost">＋ 整卷加入组卷</button><button id="exportWholeStudent" class="primary">导出整卷学生版 PDF</button><button id="exportWholeTeacher" class="primary">导出整卷教师版 PDF</button></div>`;
+  $('#addWholeExam').onclick=()=>addWholeExamToPaper(topicFilter);
+  $('#exportWholeStudent').onclick=()=>exportWholeExam(topicFilter,'student');
+  $('#exportWholeTeacher').onclick=()=>exportWholeExam(topicFilter,'teacher');
+}
 function renderTopics(){
   const counts={}; let field='topic'; let title='知识板块';
   if(bankMode==='chapter'){field='chapter';title='章节分类'}
@@ -199,7 +238,7 @@ function filtered(){
 function renderList(){const fs=filtered();$('#foundText').textContent=`找到 ${fs.length} 道题`;$('#countBadge').textContent=questions.length;$('#questionList').innerHTML=fs.map(q=>`<article class="q-card ${selectedId===q.id?'active':''}" data-id="${q.id}"><div class="q-meta"><span class="pill">${escapeHtml(q.type)}</span>${escapeHtml(q.grade)} · ${escapeHtml(q.source)}${q.examNumber?` · 第${escapeHtml(q.examNumber)}题`:''}</div><h4>${escapeHtml(q.title)}</h4><div class="q-preview">${escapeHtml(stripTex(q.stem))}</div><div class="q-foot"><span>${escapeHtml(q.chapter||q.topic)} / ${escapeHtml(q.topic)}</span><span class="difficulty">${escapeHtml(q.difficulty)}</span></div></article>`).join('')||'<div class="empty" style="height:200px">没有匹配题目</div>';document.querySelectorAll('.q-card').forEach(x=>x.onclick=()=>{selectedId=x.dataset.id;renderAll()})}
 function paperButton(q){const added=paperIds.includes(q.id);return `<button id="paperAction" class="ghost ${added?'added-paper':'add-paper'}">${added?'✓ 已加入试卷':'＋ 加入试卷'}</button>`}
 function renderDetail(){const q=questions.find(x=>x.id===selectedId)||filtered()[0];if(!q){$('#detail').innerHTML='<div class="empty">选择左侧题目查看详情</div>';return}selectedId=q.id;$('#detail').innerHTML=`<div class="detail-tools">${paperButton(q)}<button id="editAction" class="ghost">编辑题目</button></div><div class="detail-top"><div><div class="q-meta"><span class="pill">${escapeHtml(q.type)}</span>${escapeHtml(q.grade)}　<span class="pill">${escapeHtml(q.difficulty)}</span></div><h3>${escapeHtml(q.title)}</h3><div class="detail-source">章节：${escapeHtml(q.chapter||q.topic)}　·　知识板块：${escapeHtml(q.topic)}</div><div class="detail-source">来源试卷：${escapeHtml(q.source)}${q.examNumber?`　·　第 ${escapeHtml(q.examNumber)} 题`:''}</div></div><div class="detail-source">更新于 ${new Date(q.updatedAt).toLocaleString()}</div></div><div class="detail-block"><h5>题目</h5>${questionBodyHtml(q)}</div><div class="answer-box"><h5>答案</h5><div class="math-content">${latexToHtml(q.answer)}</div><hr style="border:0;border-top:1px solid #dce6f2;margin:18px 0"><h5>解析</h5><div class="math-content">${latexToHtml(q.solution)}</div>${imageHtml(q.solutionImages)}</div><div class="tags">${q.tags.map(t=>`<span class="tag"># ${escapeHtml(t)}</span>`).join('')}<span class="tag">录入：${escapeHtml(q.createdBy)}</span><span class="tag">最近编辑：${escapeHtml(q.updatedBy)}</span></div>`;$('#paperAction').onclick=()=>togglePaper(q.id);$('#editAction').onclick=()=>openEdit(q);renderMath($('#detail'))}
-function renderAll(){if(!['bank','chapters','exams'].includes(currentPage))return;renderTopics();renderList();renderDetail()}
+function renderAll(){if(!['bank','chapters','exams'].includes(currentPage))return;renderTopics();renderExamExportBar();renderList();renderDetail()}
 function switchPage(page){
   if(page==='chapters'||page==='exams'||page==='bank'){
     currentPage=page; bankMode=page==='chapters'?'chapter':page==='exams'?'exam':'all'; topicFilter='';
@@ -223,8 +262,85 @@ async function loadUsers(){if(me.role!=='admin')return;try{users=(await api('/ap
 function renderUsers(){$('#userList').innerHTML=users.map(u=>`<div class="user-row"><div class="user-info"><b>${escapeHtml(u.name)} <span class="pill">${u.role==='admin'?'管理员':'教师'}</span></b><span>用户名：${escapeHtml(u.username)} · ${u.active?'启用':'已停用'}</span></div>${u.role==='teacher'?`<button class="ghost tiny" data-active="${u.id}" data-next="${u.active?'0':'1'}">${u.active?'停用':'启用'}</button>`:''}</div>`).join('');document.querySelectorAll('[data-active]').forEach(b=>b.onclick=()=>toggleUser(b.dataset.active,b.dataset.next==='1'))}
 async function createTeacher(){const b={username:$('#newUsername').value,name:$('#newName').value,password:$('#newPassword').value};try{await api('/api/users',{method:'POST',body:JSON.stringify(b)});$('#userMsg').textContent='教师账号已创建。';$('#newUsername').value=$('#newName').value=$('#newPassword').value='';await loadUsers()}catch(e){$('#userMsg').textContent=e.message}}
 async function toggleUser(id,active){try{await api(`/api/users/${id}`,{method:'PATCH',body:JSON.stringify({active})});await loadUsers()}catch(e){alert(e.message)}}
+
+function stripLatexForLength(s=''){
+  return String(s)
+    .replace(/\$+/g,'')
+    .replace(/\\dfrac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,'$1/$2')
+    .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?/g,'')
+    .replace(/[{}\\]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function visualTextWidth(s=''){
+  const t=stripLatexForLength(s);
+  let w=0;
+  for(const ch of t){
+    if(/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(ch)) w+=2;
+    else if(/[A-Z]/.test(ch)) w+=1.15;
+    else if(/[0-9a-z]/.test(ch)) w+=.9;
+    else if(/\s/.test(ch)) w+=.35;
+    else w+=.75;
+  }
+  return w;
+}
+function splitStemChoices(stem=''){
+  const text=String(stem).replace(/\r/g,'');
+  // Supports A. / A、 / (A) / （A） and the Chinese full-width equivalents.
+  const re=/(?:^|\s|\n)(?:\(|（)?([ABCD])(?:\)|）|[\.．、])\s*/g;
+  const matches=[];
+  let m;
+  while((m=re.exec(text))!==null){
+    matches.push({letter:m[1],start:m.index,prefixEnd:re.lastIndex});
+  }
+  if(matches.length<4) return null;
+  // Keep the last complete A-B-C-D sequence to avoid accidental letters in prose.
+  let seq=null;
+  for(let i=0;i<=matches.length-4;i++){
+    if(matches[i].letter==='A'&&matches[i+1].letter==='B'&&matches[i+2].letter==='C'&&matches[i+3].letter==='D'){
+      seq=matches.slice(i,i+4);
+    }
+  }
+  if(!seq) return null;
+  const stemText=text.slice(0,seq[0].start).trim();
+  const options=seq.map((x,i)=>{
+    const end=i<3?seq[i+1].start:text.length;
+    return {letter:x.letter,text:text.slice(x.prefixEnd,end).trim()};
+  });
+  return {stemText,options};
+}
+function optionGridCols(options=[]){
+  const widths=options.map(o=>visualTextWidth(o.text));
+  const total=widths.reduce((a,b)=>a+b,0);
+  const max=Math.max(...widths,0);
+  // Global formal-paper rule:
+  // 4 columns: short options, one line A/B/C/D.
+  // 2 columns: medium options, A/B then C/D.
+  // 1 column: long options, each option on its own full-width row.
+  if(max<=14.5 && total<=48) return 4;
+  if(max<=36 && total<=105) return 2;
+  return 1;
+}
+// Serialize once: template literals must not consume TeX delimiter backslashes.
+function exportMathJaxConfig(){
+  return {tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']],processEscapes:true,macros:{vv:['\\overrightarrow{#1}',1],bm:['\\boldsymbol{#1}',1]}}};
+}
+function printStemParts(q){
+  const split=splitStemChoices(q.stem);
+  if(!split){
+    return {prompt:`<div class="stem stem-main">${latexToHtml(q.stem)}</div>`,options:''};
+  }
+  const cols=optionGridCols(split.options);
+  const prompt=`<div class="stem stem-main">${latexToHtml(split.stemText)}</div>`;
+  const options=`<div class="choice-grid cols-${cols}">${split.options.map(o=>`<div class="choice"><span class="choice-label">${o.letter}.</span><span class="choice-text">${latexToHtml(o.text)}</span></div>`).join('')}</div>`;
+  return {prompt,options};
+}
+function printStemHtml(q){
+  const p=printStemParts(q);
+  return p.prompt+p.options;
+}
 function printQuestionBody(q){
-  const stem=`<div class="stem">${latexToHtml(q.stem)}</div>`;
+  const parts=printStemParts(q);
   const layout=effectiveLayout(q);
   const p=layout.imagePlacement||'below';
   let imgs='';
@@ -234,11 +350,26 @@ function printQuestionBody(q){
     const st=imageBoxStyle(layout,true)+`--img-cols:${cols};--img-gap:${gap}px;`;
     imgs=`<div class="imgs question-images placement-${p} align-${layout.align||'left'}${q.stemImages.length>1?' multi-layout':''}" style="${st}">${q.stemImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`;
   }
-  return (p==='right'||p==='left')?`<div class="qflow ${p}">${stem}${imgs}</div>`:`${stem}${imgs}`;
+  if(p==='right'||p==='left'){
+    return `<div class="qflow ${p}"><div class="qprompt">${parts.prompt}</div>${imgs}</div>${parts.options}`;
+  }
+  return `${parts.prompt}${imgs}${parts.options}`;
 }
-function printPaper(){const title=escapeHtml($('#paperTitle').value||'高中数学练习'),sub=escapeHtml($('#paperSubtitle').value||'');const qs=paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const mathConfig=`<script>window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:true,macros:{vv:['\\\\overrightarrow{#1}',1],bm:['\\\\boldsymbol{#1}',1]}}};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${mathConfig}<style>body{font-family:'Microsoft YaHei',sans-serif;max-width:800px;margin:36px auto;color:#111;line-height:1.85}h1{text-align:center;margin-bottom:4px}.sub{text-align:center;color:#666;margin-bottom:28px}.q{margin:14px 0;page-break-inside:avoid;break-inside:avoid}.num{font-weight:bold;margin-right:8px}.meta{font-size:12px;color:#777;margin-top:4px}.qflow{display:flex;gap:8mm;align-items:flex-start}.qflow.right .stem{flex:1}.qflow.left{flex-direction:row-reverse}.qflow.left .stem{flex:1}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:4mm;width:125mm;max-width:125mm;margin:4mm 0!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.placement-right,.placement-left{justify-content:flex-start}.print-hd-q7{width:90%;margin:3mm 0 5mm}.print-hd-q7 img{display:block;width:100%;height:auto}.print-hd-q15{display:grid;grid-template-columns:minmax(0,1fr) 46mm;gap:5mm;align-items:start}.print-hd-q15-img img{display:block;width:46mm;height:auto}@page{margin:16mm}</style></head><body><h1>${title}</h1><div class="sub">${sub}</div>${qs.map((q,i)=>`<div class="q"><span class="num">${i+1}.</span>${printQuestionBody(q)}</div>`).join('')}</body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+function teacherAnswerHtml(q){
+  const answer=q.answer?`<div class="teacher-answer"><b>答案：</b><span>${latexToHtml(q.answer)}</span></div>`:'';
+  const solution=q.solution?`<div class="teacher-solution"><b>解析：</b><div>${latexToHtml(q.solution)}</div></div>`:'';
+  const simgs=q.solutionImages?.length?`<div class="teacher-solution-images">${q.solutionImages.map(src=>`<img src="${escapeHtml(src)}">`).join('')}</div>`:'';
+  return `<div class="teacher-block">${answer}${solution}${simgs}</div>`;
+}
+function exportPaper(mode='student',qsOverride=null,titleOverride=null,subtitleOverride=null){const title=escapeHtml(titleOverride||$('#paperTitle').value||'高中数学练习'),sub=escapeHtml(subtitleOverride!==null?subtitleOverride:($('#paperSubtitle').value||''));const qs=Array.isArray(qsOverride)?qsOverride:paperIds.map(id=>questions.find(q=>q.id===id)).filter(Boolean);if(!qs.length)return alert('请先选择题目');const teacher=mode==='teacher';const versionText=teacher?'教师版':'学生版';const mathConfig=`<script>window.MathJax=${JSON.stringify(exportMathJaxConfig())};<\/script><script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" onload="setTimeout(()=>window.print(),700)"><\/script>`;const html=`<!doctype html><html><head><meta charset="utf-8"><title>${title}-${versionText}</title>${mathConfig}<style>*{box-sizing:border-box}html,body{padding:0;margin:0}body{font-family:'Microsoft YaHei','Noto Sans CJK SC',sans-serif;color:#111;font-size:11.2pt;line-height:1.45}main{width:100%;margin:0 auto}h1{text-align:center;font-size:18pt;line-height:1.2;margin:0 0 2.5mm;font-weight:700}.sub{text-align:center;color:#444;font-size:10.5pt;line-height:1.25;margin:0 0 3.5mm}.version{text-align:center;font-size:9.5pt;color:#666;margin:-2mm 0 3mm}.q{display:grid;grid-template-columns:7mm minmax(0,1fr);column-gap:0;align-items:start;margin:0 0 2.8mm;page-break-inside:avoid;break-inside:avoid}.num{font-weight:700;line-height:1.45}.qcontent{min-width:0}.stem{line-height:1.45}.stem p{margin:0}.stem br{line-height:1.1}.choice-grid{display:grid;width:100%;column-gap:6mm;row-gap:1.2mm;margin:1.4mm 0 .8mm;align-items:start}.choice-grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.choice-grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:10mm;row-gap:1.6mm}.choice-grid.cols-1{grid-template-columns:1fr;row-gap:1.2mm}.choice{display:flex;gap:1.2mm;min-width:0;align-items:flex-start}.fill-blank{display:inline-block;border-bottom:.35mm solid #111;height:.9em;vertical-align:-.08em;min-width:12mm;margin:0 .7mm}.choice-label{flex:0 0 auto}.choice-text{min-width:0}.qflow{display:flex;gap:4.5mm;align-items:flex-start}.qflow .qprompt{flex:1;min-width:0}.qflow.left{flex-direction:row-reverse}.qflow .imgs{flex:0 0 auto;margin:0}.imgs{display:grid;grid-template-columns:repeat(var(--img-cols,1),minmax(0,1fr));gap:var(--img-gap,8px);margin:1.0mm 0 1.2mm}.imgs img{display:block;width:100%;max-width:100%;height:auto;object-fit:contain}.placement-right,.placement-left{justify-content:flex-start}.haidian-q7-grid-print{display:grid!important;grid-template-columns:repeat(4,1fr);gap:3mm;width:145mm;max-width:100%;margin:1.2mm 0 1.5mm!important}.haidian-q7-grid-print img{width:100%!important;max-width:100%!important;height:auto!important}.print-hd-q7{width:94%;margin:1.2mm 0 1.5mm}.print-hd-q7 img{display:block;width:100%;height:auto}.print-hd-q15{display:grid;grid-template-columns:minmax(0,1fr) 42mm;gap:4mm;align-items:start}.print-hd-q15-img img{display:block;width:42mm;height:auto}.teacher-block{margin:2mm 0 1mm;padding:2.3mm 3mm;background:#f5f7fa;border-left:1.2mm solid #7da8df;page-break-inside:avoid;break-inside:avoid}.teacher-answer{margin-bottom:1.4mm}.teacher-solution{line-height:1.42}.teacher-solution>b{display:block;margin-bottom:.5mm}.teacher-solution p{margin:0}.teacher-solution-images{display:flex;gap:2mm;flex-wrap:wrap;margin-top:1mm}.teacher-solution-images img{max-width:80mm;height:auto}mjx-container{margin-top:0!important;margin-bottom:0!important}@page{size:A4;margin:10mm 12mm 11mm}</style></head><body><main><h1>${title}</h1><div class="sub">${sub}</div><div class="version">${versionText}</div>${qs.map((q,i)=>`<div class="q"><div class="num">${i+1}.</div><div class="qcontent">${printQuestionBody(q)}${teacher?teacherAnswerHtml(q):''}</div></div>`).join('')}</main><script>(${window.installPaperImageCleanup.toString()})();<\/script></body></html>`;const w=window.open('','_blank');w.document.write(html);w.document.close()}
+function printPaper(){return exportPaper('student')}
+function exportWholeExam(source,mode='student'){
+  const qs=examQuestions(source);
+  if(!qs.length)return alert('这套试卷暂时没有题目');
+  exportPaper(mode,qs,source,'');
+}
 
-$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#printPaper').onclick=printPaper;$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
+$('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('#logoutBtn').onclick=async()=>{await api('/api/logout',{method:'POST'});location.reload()};$('#importBtn').onclick=openImport;$('#addBtn').onclick=openCreate;$('#closeModal').onclick=()=>$('#modal').classList.add('hidden');$('#closeImportModal').onclick=()=>$('#importModal').classList.add('hidden');$('#importFile').addEventListener('change',e=>handleImportFile(e.target.files?.[0]));$('#doImport').onclick=doBatchImport;$('#saveQuestion').onclick=saveQuestion;$('#deleteQuestion').onclick=deleteQuestion;$('#navBank').onclick=()=>switchPage('bank');$('#navChapters').onclick=()=>switchPage('chapters');$('#navExams').onclick=()=>switchPage('exams');$('#navPaper').onclick=()=>switchPage('paper');$('#navUsers').onclick=()=>switchPage('users');$('#clearPaper').onclick=()=>{if(confirm('清空当前试卷选题？')){paperIds=[];savePaper();renderPaper()}};$('#exportStudentPdf').onclick=()=>exportPaper('student');$('#exportTeacherPdf').onclick=()=>exportPaper('teacher');$('#createTeacher').onclick=createTeacher;['search','typeFilter','difficultyFilter'].forEach(id=>$('#'+id).addEventListener(id==='search'?'input':'change',renderAll));
 $('#fStemImages').addEventListener('change',async e=>{try{draftStemImages.push(...await filesToDataUrls(e.target.files));refreshImagePreview('stem');refreshLayoutPreview();e.target.value=''}catch(err){alert(err.message)}});
 document.querySelectorAll('[data-layout-preset]').forEach(b=>b.addEventListener('click',()=>applyLayoutPreset(b.dataset.layoutPreset)));
 ['fImagePlacement','fImageAlign','fImageWidthPct','fImageMaxMm','fImageGridCols','fImageGap','fPrintWidthPct','fPrintMaxMm','fTextWrap','fKeepWithStem'].forEach(id=>$('#'+id)?.addEventListener('input',refreshLayoutPreview));

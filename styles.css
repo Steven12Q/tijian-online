@@ -66,3 +66,34 @@
 .question-images.align-center{margin-left:auto!important;margin-right:auto!important}.question-images.align-right{margin-left:auto!important}
 @media(max-width:900px){.layout-grid{grid-template-columns:1fr 1fr}.question-flow{display:block!important}.question-flow .question-images{margin-top:10px!important}}
 @media(max-width:560px){.layout-grid{grid-template-columns:1fr}}
+
+/* v1.3.9 学生版/教师版导出 */
+.paper-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* v1.3.11 全局选择题排版 + 实线填空 */
+.fill-blank{
+  display:inline-block;
+  border-bottom:1.4px solid currentColor;
+  height:.9em;
+  vertical-align:-.08em;
+  min-width:42px;
+  margin:0 3px;
+}
+
+/* v1.3.12 按试卷一键整卷 */
+.exam-export-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin:0 16px 10px;
+  padding:10px 12px;
+  border:1px solid #d7e4f3;
+  background:#f7fbff;
+  border-radius:10px;
+}
+.exam-export-info{display:flex;flex-direction:column;gap:3px;min-width:0}
+.exam-export-info b{font-size:14px;color:#17385f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.exam-export-info span{font-size:11px;color:#7890a9}
+.exam-export-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:980px){.exam-export-bar{align-items:flex-start;flex-direction:column}.exam-export-actions{justify-content:flex-start}}
